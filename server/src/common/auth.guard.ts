@@ -14,13 +14,27 @@ export class AuthGuard implements CanActivate {
     const header: string = req.headers['authorization'] || '';
     const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
     if (!token) throw new AppError(401, 'UNAUTHORIZED', '로그인이 필요합니다.');
-    const row = await this.db.one<{ id: string; user_id: string; status: string }>(
-      `SELECT s.id, s.user_id, u.status FROM sessions s JOIN users u ON u.id = s.user_id
+    const row = await this.db.one<{ id: string; user_id: string; status: string; suspended_until: Date | null }>(
+      `SELECT s.id, s.user_id, u.status, u.suspended_until FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = $1 AND s.revoked_at IS NULL`,
       [sha256(token)],
     );
     if (!row || row.status === 'deleted') throw new AppError(401, 'UNAUTHORIZED', '로그인이 필요합니다.');
-    if (row.status === 'suspended') throw new AppError(403, 'SUSPENDED', '이용이 정지된 계정입니다. 내 정보 > 문의에서 확인해 주세요.');
+    if (row.status === 'suspended') {
+      if (row.suspended_until && new Date(row.suspended_until) <= new Date()) {
+        // 정지 기간이 끝났으면 다음 요청에서 바로 풀린다.
+        await this.db.query(`UPDATE users SET status = 'active', suspended_until = NULL WHERE id = $1 AND status = 'suspended'`, [row.user_id]);
+      } else {
+        // 정지 중에도 조치 내용 확인, 이의신청, 문의, 로그아웃, 계정 삭제는 할 수 있다.
+        const path: string = (req.originalUrl || req.url || '').split('?')[0];
+        const allowed = ['/v1/me', '/v1/notices', '/v1/sanctions', '/v1/appeals', '/v1/inquiries', '/v1/announcements', '/v1/auth/logout'];
+        const ok = allowed.includes(path) || path.startsWith('/v1/notices/') || (path === '/v1/me' && ['GET', 'DELETE'].includes(req.method));
+        if (!ok || (path === '/v1/me' && !['GET', 'DELETE'].includes(req.method))) {
+          const until = row.suspended_until ? new Date(row.suspended_until).toISOString() : null;
+          throw new AppError(403, 'SUSPENDED', '이용이 정지된 계정입니다. 내 정보에서 조치 내용을 확인하고 이의신청할 수 있습니다.', { until });
+        }
+      }
+    }
     req.userId = row.user_id;
     req.sessionId = row.id;
 

@@ -82,12 +82,37 @@ export class SafetyService {
       );
       if (!m || m.sender_id === userId) throw notFound('신고 대상을 찾을 수 없습니다.');
       targetUserId = m.sender_id;
-      snapshot = { conversationId: m.conversation_id, seq: Number(m.seq), kind: m.kind, body: m.body, sentAt: new Date(m.created_at).toISOString() };
+      snapshot = { messageId: m.id, conversationId: m.conversation_id, seq: Number(m.seq), kind: m.kind, body: m.body, mediaId: m.media_id, sentAt: new Date(m.created_at).toISOString() };
     } else if (targetType === 'greeting') {
       const g = await this.db.one<any>('SELECT * FROM greeting_requests WHERE id::text = $1 AND receiver_id = $2', [targetId, userId]);
       if (!g) throw notFound('신고 대상을 찾을 수 없습니다.');
       targetUserId = g.sender_id;
       snapshot = { body: g.body, sentAt: new Date(g.created_at).toISOString() };
+    } else if (targetType === 'post') {
+      const p = await this.db.one<any>(`SELECT * FROM posts WHERE id::text = $1 AND status = 'visible'`, [targetId]);
+      if (!p || p.author_id === userId) throw notFound('신고 대상을 찾을 수 없습니다.');
+      targetUserId = p.author_id;
+      snapshot = { kind: p.kind, category: p.category, title: p.title, body: p.body, price: p.price, mediaIds: p.media_ids, postedAt: new Date(p.created_at).toISOString() };
+    } else if (targetType === 'comment') {
+      const c = await this.db.one<any>(`SELECT * FROM post_comments WHERE id::text = $1 AND status = 'visible'`, [targetId]);
+      if (!c || c.author_id === userId) throw notFound('신고 대상을 찾을 수 없습니다.');
+      targetUserId = c.author_id;
+      snapshot = { postId: c.post_id, body: c.body, postedAt: new Date(c.created_at).toISOString() };
+    } else if (targetType === 'room') {
+      const r = await this.db.one<any>('SELECT * FROM rooms WHERE conversation_id::text = $1', [targetId]);
+      if (!r) throw notFound('신고 대상을 찾을 수 없습니다.');
+      targetUserId = r.owner_id;
+      snapshot = { title: r.title, intro: r.intro, tags: r.tags, imageMediaId: r.image_media_id };
+    } else if (targetType === 'photo') {
+      // 내가 볼 수 있는 사진만 신고할 수 있다(대화 첨부는 참여자만).
+      const m = await this.db.one<any>(
+        `SELECT m.* FROM media m WHERE m.id::text = $1 AND m.status = 'ready'
+            AND (m.purpose <> 'chat' OR EXISTS (SELECT 1 FROM conversation_participants cp WHERE cp.conversation_id = m.conversation_id AND cp.user_id = $2))`,
+        [targetId, userId],
+      );
+      if (!m || m.owner_id === userId) throw notFound('신고 대상을 찾을 수 없습니다.');
+      targetUserId = m.owner_id;
+      snapshot = { mediaId: m.id, purpose: m.purpose, conversationId: m.conversation_id, uploadedAt: new Date(m.created_at).toISOString() };
     } else {
       throw bad('INVALID_INPUT', '신고 대상이 올바르지 않습니다.');
     }

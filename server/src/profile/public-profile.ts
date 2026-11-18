@@ -13,9 +13,11 @@ export interface PublicProfile {
   regionName: string;
   bio: string;
   avatarColor: number;
+  photoMediaId: string | null;
   interests: string[];
   commonInterests: string[];
-  proximity: 'same_neighborhood' | 'nearby' | 'same_region' | 'same_province' | 'far';
+  /** visiting = 다른 지역 회원이 이 지역을 둘러보는 중(실제 위치처럼 표시하지 않는다) */
+  proximity: 'same_neighborhood' | 'nearby' | 'same_region' | 'same_province' | 'far' | 'visiting';
   activity: 'now' | 'today' | 'week' | 'earlier' | null;
   acceptsGreetings: boolean;
 }
@@ -50,7 +52,7 @@ export async function selectPublicProfiles(q: Q, f: ListFilter): Promise<PublicP
   if (f.onlyUserId) where.push(`p.user_id = ${add(f.onlyUserId)}`);
   else where.push(`p.user_id <> $1`);
   if (f.requireVisible) where.push(`p.show_in_nearby`);
-  if (f.regionId) where.push(`p.region_id = ${add(f.regionId)}`);
+  if (f.regionId) where.push(`(p.region_id = ${add(f.regionId)} OR (p.browse_until > now() AND p.browse_region_id = $${params.length}))`);
   if (f.ageBands?.length) where.push(`p.age_band = ANY(${add(f.ageBands)}::text[])`);
   if (f.interestIds?.length) {
     where.push(`EXISTS (SELECT 1 FROM profile_interests fi WHERE fi.user_id = p.user_id AND fi.interest_id = ANY(${add(f.interestIds)}::text[]))`);
@@ -58,7 +60,8 @@ export async function selectPublicProfiles(q: Q, f: ListFilter): Promise<PublicP
 
   // rank: 0 같은 동네, 1 가까운 지역/같은 지역, 2 같은 시·도, 3 그 외
   const inner = `
-    SELECT p.user_id, p.nickname, p.age_band, p.bio, p.avatar_color, p.accept_greetings,
+    SELECT p.user_id, p.nickname, p.age_band, p.bio, p.avatar_color, p.accept_greetings, p.photo_media_id,
+           (p.browse_until > now() AND p.browse_region_id = vr.id AND r.id <> vr.id) AS visiting,
            CASE WHEN p.gender_public THEN p.gender END AS gender,
            r.name AS region_name,
            CASE WHEN p.show_last_active THEN p.last_active_at END AS seen_at,
@@ -75,6 +78,7 @@ export async function selectPublicProfiles(q: Q, f: ListFilter): Promise<PublicP
 
   const ranked = `
     SELECT x.*, CASE
+        WHEN x.visiting THEN 2
         WHEN x.dist IS NOT NULL AND x.dist < 3 THEN 0
         WHEN x.dist IS NOT NULL AND x.dist < 15 THEN 1
         WHEN x.dist IS NULL AND x.same_region THEN 1
@@ -84,7 +88,7 @@ export async function selectPublicProfiles(q: Q, f: ListFilter): Promise<PublicP
 
   let scopeWhere = '';
   if (!f.onlyUserId && !f.regionId) {
-    if (f.scope === 'near' || !f.scope) scopeWhere = 'WHERE y.rank <= 1 OR y.same_region';
+    if (f.scope === 'near' || !f.scope) scopeWhere = 'WHERE y.rank <= 1 OR y.same_region OR y.visiting';
     else if (f.scope === 'sido') scopeWhere = 'WHERE y.rank <= 2';
   }
   const order =
@@ -95,7 +99,7 @@ export async function selectPublicProfiles(q: Q, f: ListFilter): Promise<PublicP
   const offset = add(f.offset ?? 0);
 
   const rows = await q.query<any>(
-    `SELECT y.user_id, y.nickname, y.age_band, y.bio, y.avatar_color, y.accept_greetings, y.gender, y.region_name,
+    `SELECT y.user_id, y.nickname, y.age_band, y.bio, y.avatar_color, y.accept_greetings, y.gender, y.region_name, y.photo_media_id, y.visiting,
             y.rank, (y.dist IS NOT NULL) AS has_dist, y.same_region,
             CASE WHEN y.seen_at IS NULL THEN NULL
                  WHEN y.seen_at > now() - interval '10 minutes' THEN 'now'
@@ -120,10 +124,12 @@ export async function selectPublicProfiles(q: Q, f: ListFilter): Promise<PublicP
     regionName: r.region_name,
     bio: r.bio,
     avatarColor: r.avatar_color,
+    photoMediaId: r.photo_media_id,
     interests: r.interests,
     commonInterests: r.common_interests,
-    proximity:
-      r.rank === 0 ? 'same_neighborhood' : r.rank === 1 ? (r.has_dist ? 'nearby' : 'same_region') : r.rank === 2 ? 'same_province' : 'far',
+    proximity: r.visiting
+      ? 'visiting'
+      : r.rank === 0 ? 'same_neighborhood' : r.rank === 1 ? (r.has_dist ? 'nearby' : 'same_region') : r.rank === 2 ? 'same_province' : 'far',
     activity: r.activity,
     acceptsGreetings: r.accept_greetings,
   }));

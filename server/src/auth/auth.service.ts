@@ -3,6 +3,7 @@ import { AppConfig, CONFIG } from '../config';
 import { encrypt, hmac, randomToken, safeEqualHex, sha256 } from '../common/crypto';
 import { AppError, bad, conflict, forbidden, tooMany } from '../common/errors';
 import { str } from '../common/validate';
+import { ContentFilter } from '../common/content-filter';
 import { Db, Q } from '../db/db';
 import { RateLimiter } from '../realtime/redis';
 import { Realtime } from '../realtime/realtime';
@@ -25,6 +26,7 @@ export class AuthService {
     @Inject(Db) private readonly db: Db,
     @Inject(RateLimiter) private readonly rl: RateLimiter,
     @Inject(Realtime) private readonly rt: Realtime,
+    @Inject(ContentFilter) private readonly filter: ContentFilter,
   ) {}
 
   status() {
@@ -35,7 +37,7 @@ export class AuthService {
     const provider = resolveIdentityProvider(this.cfg);
     const phone = normalizePhone(phoneRaw);
     const phoneHash = hmac(this.cfg.phonePepper, phone);
-    if (!(await this.rl.hit(`auth:phone:${phoneHash}`, 5, 600)) || !(await this.rl.hit(`auth:ip:${ip}`, 30, 600))) {
+    if (!(await this.rl.hit(`auth:phone:${phoneHash}`, 5, 600)) || !(await this.rl.hit(`auth:ip:${ip}`, this.cfg.appEnv === 'production' ? 30 : 2000, 600))) {
       throw tooMany('인증 요청이 많습니다. 10분 뒤에 다시 시도해 주세요.');
     }
     const sent = await provider.sendPhoneCode(phone);
@@ -106,6 +108,7 @@ export class AuthService {
     const nickname = str(body?.nickname, '닉네임', 2, 12);
     if (!NICKNAME.test(nickname)) throw bad('INVALID_NICKNAME', '닉네임은 한글·영문·숫자·밑줄 2~12자로 입력해 주세요.');
     const bio = typeof body?.bio === 'string' ? body.bio.trim().slice(0, 300) : '';
+    this.filter.assertText(bio);
     const gender = ['male', 'female', 'other'].includes(body?.gender) ? body.gender : null;
     const genderPublic = gender ? body?.genderPublic === true : false;
     const regionId = String(body?.regionId || '');

@@ -26,6 +26,27 @@ export interface AppConfig {
   identityMode: IdentityMode;
   adminToken: string | null;
   corsOrigins: string[];
+  publicUrl: string;
+  storage: {
+    driver: 'local' | 's3';
+    localDir: string;
+    urlTtlSec: number;
+    s3: { endpoint: string; region: string; bucket: string; accessKey: string; secretKey: string };
+  };
+  push: { provider: 'log' | 'fcm'; fcmServiceAccount: string | null };
+  iap: {
+    mode: 'dev' | 'live';
+    googlePackage: string | null;
+    googleServiceAccount: string | null;
+    appleIssuerId: string | null;
+    appleKeyId: string | null;
+    applePrivateKey: string | null;
+    appleBundleId: string | null;
+    appleSandbox: boolean;
+  };
+  adminEmail: string | null;
+  adminPassword: string | null;
+  blockedWords: string[];
   brand: Brand;
   problems: { key: string; message: string; blocking: boolean }[];
 }
@@ -116,7 +137,56 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     problems.push({ key: 'ADMIN_TOKEN', message: 'ADMIN_TOKEN이 없어 관리자 상태 API가 비활성화되어 있습니다.', blocking: false });
   }
 
+  const storageDriver = env.STORAGE_DRIVER === 's3' ? 's3' : 'local';
+  if (storageDriver === 'local' && appEnv !== 'development') {
+    problems.push({
+      key: 'STORAGE_DRIVER',
+      message: '사진을 서버 디스크에 저장 중입니다. 재배포하면 사라질 수 있으니 S3 호환 저장소(STORAGE_DRIVER=s3)를 설정하세요.',
+      blocking: false,
+    });
+  }
+  const pushProvider = env.PUSH_PROVIDER === 'fcm' && env.FCM_SERVICE_ACCOUNT ? 'fcm' : 'log';
+  if (pushProvider === 'log') {
+    problems.push({ key: 'PUSH_PROVIDER', message: '푸시 발송기가 설정되지 않아 발송 기록만 남깁니다(FCM 서비스 계정 필요).', blocking: false });
+  }
+  const iapMode = env.IAP_MODE === 'live' ? 'live' : 'dev';
+  if (iapMode === 'dev' && appEnv === 'production') {
+    problems.push({ key: 'IAP_MODE', message: '스토어 결제 검증 설정이 없어 운영 환경에서 구매 처리가 중단된 상태입니다.', blocking: true });
+  }
+  problems.push({
+    key: 'IMAGE_FILTER',
+    message: '사진 유해 콘텐츠 자동 판별 사업자가 연결되지 않았습니다. 현재는 형식·크기 검사와 신고 후 숨김으로만 대응합니다.',
+    blocking: false,
+  });
+
   return {
+    publicUrl: (env.PUBLIC_URL || env.RENDER_EXTERNAL_URL || `http://localhost:${env.PORT || 3000}`).replace(/\/$/, ''),
+    storage: {
+      driver: storageDriver,
+      localDir: env.MEDIA_DIR || path.resolve(process.cwd(), '.media'),
+      urlTtlSec: Number(env.MEDIA_URL_TTL || 300),
+      s3: {
+        endpoint: (env.S3_ENDPOINT || '').replace(/\/$/, ''),
+        region: env.S3_REGION || 'auto',
+        bucket: env.S3_BUCKET || '',
+        accessKey: env.S3_ACCESS_KEY || '',
+        secretKey: env.S3_SECRET_KEY || '',
+      },
+    },
+    push: { provider: pushProvider, fcmServiceAccount: env.FCM_SERVICE_ACCOUNT || null },
+    iap: {
+      mode: iapMode,
+      googlePackage: env.GOOGLE_PLAY_PACKAGE || null,
+      googleServiceAccount: env.GOOGLE_SERVICE_ACCOUNT || null,
+      appleIssuerId: env.APPLE_ISSUER_ID || null,
+      appleKeyId: env.APPLE_KEY_ID || null,
+      applePrivateKey: env.APPLE_PRIVATE_KEY || null,
+      appleBundleId: env.APPLE_BUNDLE_ID || null,
+      appleSandbox: env.APPLE_SANDBOX !== 'false',
+    },
+    adminEmail: env.ADMIN_EMAIL || null,
+    adminPassword: env.ADMIN_PASSWORD || null,
+    blockedWords: (env.BLOCKED_WORDS || '').split(',').map((w) => w.trim()).filter(Boolean),
     appEnv,
     port: Number(env.PORT || 3000),
     databaseUrl: env.DATABASE_URL || 'postgres://eumtalk:eumtalk@localhost:5432/eumtalk',

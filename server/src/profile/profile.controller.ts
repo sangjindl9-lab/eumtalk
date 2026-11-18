@@ -2,7 +2,9 @@ import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Put, Que
 import { AuthGuard, UserId } from '../common/auth.guard';
 import { bad, conflict, forbidden, notFound } from '../common/errors';
 import { intIn, optBool, uuid } from '../common/validate';
+import { ContentFilter } from '../common/content-filter';
 import { Db } from '../db/db';
+import { MediaService } from '../media/media.service';
 import { selectPublicProfiles } from './public-profile';
 
 const NICKNAME = /^[가-힣a-zA-Z0-9_]{2,12}$/;
@@ -10,7 +12,11 @@ const AGE_BANDS = ['20대', '30대', '40대', '50대', '60대 이상'];
 
 @Controller('v1')
 export class ProfileController {
-  constructor(@Inject(Db) private readonly db: Db) {}
+  constructor(
+    @Inject(Db) private readonly db: Db,
+    @Inject(ContentFilter) private readonly filter: ContentFilter,
+    @Inject(MediaService) private readonly media: MediaService,
+  ) {}
 
   @Get('regions')
   async regions() {
@@ -27,10 +33,11 @@ export class ProfileController {
   @UseGuards(AuthGuard)
   async me(@UserId() userId: string) {
     const r = await this.db.one<any>(
-      `SELECT p.*, r.name AS region_name, r.sido,
+      `SELECT p.*, r.name AS region_name, r.sido, u.status AS user_status, u.suspended_until,
+              (SELECT name FROM regions WHERE id = p.browse_region_id) AS browse_region_name,
               (SELECT updated_at FROM user_locations WHERE user_id = p.user_id) AS location_at,
               ARRAY(SELECT interest_id FROM profile_interests WHERE user_id = p.user_id) AS interest_ids
-         FROM profiles p JOIN regions r ON r.id = p.region_id WHERE p.user_id = $1`,
+         FROM profiles p JOIN regions r ON r.id = p.region_id JOIN users u ON u.id = p.user_id WHERE p.user_id = $1`,
       [userId],
     );
     if (!r) throw notFound();
@@ -45,8 +52,12 @@ export class ProfileController {
       sido: r.sido,
       bio: r.bio,
       avatarColor: r.avatar_color,
+      photoMediaId: r.photo_media_id,
       interestIds: r.interest_ids,
-      settings: { showInNearby: r.show_in_nearby, showLastActive: r.show_last_active, acceptGreetings: r.accept_greetings },
+      settings: { showInNearby: r.show_in_nearby, showLastActive: r.show_last_active, acceptGreetings: r.accept_greetings, pushPreview: r.push_preview },
+      browse: r.browse_until && new Date(r.browse_until) > new Date() ? { regionId: r.browse_region_id, regionName: r.browse_region_name, until: new Date(r.browse_until).toISOString() } : null,
+      status: r.user_status,
+      suspendedUntil: r.suspended_until ? new Date(r.suspended_until).toISOString() : null,
       locationShared: !!r.location_at,
     };
   }
@@ -68,7 +79,15 @@ export class ProfileController {
       }
       set('nickname', n);
     }
-    if (body?.bio !== undefined) set('bio', String(body.bio).trim().slice(0, 300));
+    if (body?.bio !== undefined) {
+      const bio = String(body.bio).trim().slice(0, 300);
+      this.filter.assertText(bio); // 공개 프로필 문구도 게시 전 필터를 거친다
+      set('bio', bio);
+    }
+    if (body?.photoMediaId !== undefined) {
+      if (body.photoMediaId) await this.media.assertOwned(this.db, userId, [String(body.photoMediaId)], 'profile');
+      set('photo_media_id', body.photoMediaId || null);
+    }
     if (body?.gender !== undefined) set('gender', ['male', 'female', 'other'].includes(body.gender) ? body.gender : null);
     if (optBool(body?.genderPublic) !== undefined) set('gender_public', body.genderPublic);
     if (body?.regionId !== undefined) {
@@ -79,6 +98,7 @@ export class ProfileController {
     if (optBool(s.showInNearby) !== undefined) set('show_in_nearby', s.showInNearby);
     if (optBool(s.showLastActive) !== undefined) set('show_last_active', s.showLastActive);
     if (optBool(s.acceptGreetings) !== undefined) set('accept_greetings', s.acceptGreetings);
+    if (optBool(s.pushPreview) !== undefined) set('push_preview', s.pushPreview);
 
     await this.db.tx(async (q) => {
       if (sets.length) await q.query(`UPDATE profiles SET ${sets.join(', ')}, updated_at = now() WHERE user_id = $1`, params);
@@ -130,13 +150,13 @@ export class ProfileController {
     const offset = intIn(qy.offset, 0, 0, 5000);
     let regionId: string | undefined;
     if (qy.regionId) {
-      // 무료 범위는 내 시·도 안의 지역까지. 다른 시·도 둘러보기는 5단계(포인트·프리미엄)에서 연다.
+      // 무료 범위는 내 시·도 안의 지역까지. 다른 시·도는 '다른 지역 둘러보기' 이용 중인 지역만 열린다.
       const ok = await this.db.one(
         `SELECT 1 FROM regions r JOIN profiles p ON p.user_id = $2 JOIN regions mine ON mine.id = p.region_id
-          WHERE r.id = $1 AND r.sido = mine.sido`,
+          WHERE r.id = $1 AND (r.sido = mine.sido OR (p.browse_region_id = r.id AND p.browse_until > now()))`,
         [String(qy.regionId), userId],
       );
-      if (!ok) throw forbidden('OTHER_REGION_LOCKED', '다른 시·도 둘러보기는 준비 중인 기능입니다.');
+      if (!ok) throw forbidden('OTHER_REGION_LOCKED', '다른 지역 둘러보기 이용권이 필요합니다.');
       regionId = String(qy.regionId);
     }
     const list = (v: unknown) => (typeof v === 'string' && v ? v.split(',').slice(0, 10) : undefined);

@@ -19,6 +19,18 @@ export class GreetingsController {
     return this.greetings.send(userId, uuid(body?.toUserId, '회원'), body?.text);
   }
 
+  @Post('multi/preview')
+  @HttpCode(200)
+  multiPreview(@UserId() userId: string, @Body() body: any) {
+    return this.greetings.multiPreview(userId, body);
+  }
+
+  @Post('multi')
+  @HttpCode(200)
+  multi(@UserId() userId: string, @Body() body: any) {
+    return this.greetings.multiSend(userId, body);
+  }
+
   @Post(':id/accept')
   @HttpCode(200)
   accept(@UserId() userId: string, @Param('id') id: string) {

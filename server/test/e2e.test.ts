@@ -6,101 +6,14 @@
  */
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
-import { Pool } from 'pg';
-import WebSocket from 'ws';
-import { createServer } from '../src/bootstrap';
-import { loadConfig } from '../src/config';
-
-const DB_URL = process.env.TEST_DATABASE_URL || 'postgres://postgres@127.0.0.1:5433/eumtalk_test';
-const REDIS_URL = process.env.TEST_REDIS_URL || '';
-const PORT = 4100 + Math.floor(Math.random() * 500);
-const BASE = `http://127.0.0.1:${PORT}`;
-const WONJU = 'gangwon-02';
+import { ADMIN, api, cid, Device, nextPhone, nick, PORT, resetDb, signup, sleep, sql, startServer, WONJU } from './helpers';
 
 let app: any;
 let prodApp: any;
-let phoneSeq = Math.floor(Math.random() * 9000000) + 1000000;
-
-async function api(method: string, path: string, token?: string | null, body?: unknown, base = BASE) {
-  const res = await fetch(base + path, {
-    method,
-    headers: { 'content-type': 'application/json', 'x-platform': 'android', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const json: any = await res.json().catch(() => ({}));
-  return { status: res.status, body: json };
-}
-
-interface Account {
-  token: string;
-  userId: string;
-  nickname: string;
-}
-
-async function signup(nickname: string, extra: Record<string, unknown> = {}): Promise<Account> {
-  const phone = `010${String(phoneSeq++).padStart(8, '0')}`;
-  const start = await api('POST', '/v1/auth/phone/start', null, { phone });
-  assert.equal(start.status, 200, JSON.stringify(start.body));
-  const verify = await api('POST', '/v1/auth/phone/verify', null, { verificationId: start.body.verificationId, code: start.body.devCode });
-  assert.equal(verify.body.status, 'signup');
-  const adult = await api('POST', '/v1/auth/adult/verify', null, { signupToken: verify.body.signupToken, devBirthYear: 1990 });
-  assert.equal(adult.status, 200, JSON.stringify(adult.body));
-  const done = await api('POST', '/v1/auth/signup', null, {
-    signupToken: verify.body.signupToken,
-    nickname,
-    regionId: WONJU,
-    interestIds: ['i01', 'i09'],
-    bio: `${nickname} 소개`,
-    ...extra,
-  });
-  assert.equal(done.status, 201, JSON.stringify(done.body));
-  return { token: done.body.token, userId: done.body.userId, nickname };
-}
-
-class Device {
-  events: any[] = [];
-  ws!: WebSocket;
-  constructor(private readonly token: string) {}
-  connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.ws = new WebSocket(`ws://127.0.0.1:${PORT}/v1/ws`);
-      this.ws.on('open', () => this.ws.send(JSON.stringify({ type: 'auth', token: this.token })));
-      this.ws.on('message', (raw) => {
-        const ev = JSON.parse(raw.toString());
-        if (ev.type === 'ready') resolve();
-        else this.events.push(ev);
-      });
-      this.ws.on('error', reject);
-      this.ws.on('close', (code) => code === 4401 && reject(new Error('unauthorized')));
-    });
-  }
-  disconnect() {
-    this.ws.terminate();
-  }
-  async waitFor(type: string, pred: (d: any) => boolean = () => true, ms = 3000): Promise<any> {
-    const until = Date.now() + ms;
-    while (Date.now() < until) {
-      const hit = this.events.find((e) => e.type === type && pred(e.data));
-      if (hit) return hit.data;
-      await new Promise((r) => setTimeout(r, 20));
-    }
-    throw new Error(`이벤트 미수신: ${type}`);
-  }
-  count(type: string, pred: (d: any) => boolean = () => true) {
-    return this.events.filter((e) => e.type === type && pred(e.data)).length;
-  }
-}
-
-const cid = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const nick = (p: string) => `${p}${Math.random().toString(36).slice(2, 7)}`;
 
 before(async () => {
-  const pool = new Pool({ connectionString: DB_URL });
-  await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
-  await pool.end();
-  const cfg = loadConfig({ APP_ENV: 'development', PORT: String(PORT), DATABASE_URL: DB_URL, REDIS_URL, ADMIN_TOKEN: 'test-admin' } as any);
-  app = await createServer(cfg, { logger: false });
+  await resetDb();
+  app = (await startServer()).app;
 });
 
 after(async () => {
@@ -109,7 +22,7 @@ after(async () => {
 });
 
 test('가입: 휴대폰 인증과 성인 확인을 각각 거쳐야 하고, 미성년은 가입할 수 없다', async () => {
-  const phone = `010${String(phoneSeq++).padStart(8, '0')}`;
+  const phone = nextPhone();
   const start = await api('POST', '/v1/auth/phone/start', null, { phone });
   const wrong = await api('POST', '/v1/auth/phone/verify', null, { verificationId: start.body.verificationId, code: '123456' });
   assert.equal(wrong.body.error.code, 'CODE_MISMATCH');
@@ -127,7 +40,7 @@ test('가입: 휴대폰 인증과 성인 확인을 각각 거쳐야 하고, 미�
 });
 
 test('가입 후 같은 번호로 다시 인증하면 로그인된다', async () => {
-  const phone = `010${String(phoneSeq++).padStart(8, '0')}`;
+  const phone = nextPhone();
   const s1 = await api('POST', '/v1/auth/phone/start', null, { phone });
   const v1 = await api('POST', '/v1/auth/phone/verify', null, { verificationId: s1.body.verificationId, code: '000000' });
   await api('POST', '/v1/auth/adult/verify', null, { signupToken: v1.body.signupToken, devBirthYear: 1985 });
@@ -144,21 +57,23 @@ test('가입 후 같은 번호로 다시 인증하면 로그인된다', async ()
 });
 
 test('운영 환경에 본인확인 설정이 없으면 가입이 중단되고 관리자 상태에 누락이 표시된다', async () => {
-  const port = PORT + 600;
-  const cfg = loadConfig({
-    APP_ENV: 'production', PORT: String(port), DATABASE_URL: DB_URL, REDIS_URL,
-    DATA_KEY: 'ab'.repeat(32), PHONE_PEPPER: 'pepper', ADMIN_TOKEN: 'prod-admin', IDENTITY_PROVIDER: 'dev',
-  } as any);
-  prodApp = await createServer(cfg, { logger: false, autoMigrate: false });
-  const base = `http://127.0.0.1:${port}`;
+  const started = await startServer(
+    { APP_ENV: 'production', DATA_KEY: 'ab'.repeat(32), PHONE_PEPPER: 'pepper', IDENTITY_PROVIDER: 'dev' },
+    { autoMigrate: false, port: PORT + 600 },
+  );
+  prodApp = started.app;
+  const base = started.base;
   const start = await api('POST', '/v1/auth/phone/start', null, { phone: '01012345678' }, base);
   assert.equal(start.status, 503);
   assert.equal(start.body.error.code, 'IDENTITY_NOT_CONFIGURED');
   assert.equal((await api('GET', '/v1/app-config', null, undefined, base)).body.signupAvailable, false);
-  const status = await api('GET', '/v1/admin/system-status', 'prod-admin', undefined, base);
+  const login = await api('POST', '/v1/admin/login', null, ADMIN, base);
+  const status = await api('GET', '/v1/admin/system-status', login.body.token, undefined, base);
   assert.equal(status.body.signupAvailable, false);
   assert.ok(status.body.problems.some((p: any) => p.key === 'IDENTITY_PROVIDER' && p.blocking));
+  assert.ok(status.body.problems.some((p: any) => p.key === 'IAP_MODE' && p.blocking), '운영 환경에서 결제 검증 미설정도 표시');
   assert.equal((await api('GET', '/v1/admin/system-status', 'wrong', undefined, base)).status, 401);
+  // 운영 환경에서는 개발용 결제 검증도 거부된다.
 });
 
 test('주변: 위치 권한 없이 원주시를 고른 회원도 서로 보이고, 좌표·거리·전화번호는 응답에 없다', async () => {
@@ -371,9 +286,7 @@ test('신고: 서버가 문제 메시지와 시점을 사본으로 남긴다', a
   const m = await api('POST', `/v1/conversations/${convId}/messages`, a.token, { clientMsgId: cid(), text: '문제가 되는 메시지' });
   const rep = await api('POST', '/v1/reports', b.token, { targetType: 'message', targetId: m.body.message.id, reason: 'abuse', detail: '욕설' });
   assert.equal(rep.status, 201);
-  const pool = new Pool({ connectionString: DB_URL });
-  const row = (await pool.query('SELECT * FROM reports WHERE id = $1', [rep.body.id])).rows[0];
-  await pool.end();
+  const row = (await sql('SELECT * FROM reports WHERE id = $1', [rep.body.id]))[0];
   assert.equal(row.target_user_id, a.userId);
   assert.equal(row.snapshot.body, '문제가 되는 메시지');
   assert.ok(row.snapshot.sentAt && row.snapshot.reportedAt);
