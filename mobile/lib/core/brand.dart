@@ -12,10 +12,7 @@ class Brand {
 
   static Future<void> load() async {
     try {
-      instance = Brand(
-        jsonDecode(await rootBundle.loadString('assets/brand.json'))
-            as Map<String, dynamic>,
-      );
+      instance = Brand(jsonDecode(await rootBundle.loadString('assets/brand.json')) as Map<String, dynamic>);
     } catch (_) {
       instance = Brand(const {});
     }
@@ -26,8 +23,7 @@ class Brand {
   String get tagline => (raw['tagline'] ?? '') as String;
   Color get seed => _color(raw['seedColor'], const Color(0xFF2F6B5E));
   Color get accent => _color(raw['accentColor'], const Color(0xFFE8A33D));
-  Map<String, dynamic> get operator =>
-      (raw['operator'] as Map?)?.cast<String, dynamic>() ?? const {};
+  Map<String, dynamic> get operator => (raw['operator'] as Map?)?.cast<String, dynamic>() ?? const {};
 
   static Color _color(dynamic hex, Color fallback) {
     if (hex is! String) return fallback;

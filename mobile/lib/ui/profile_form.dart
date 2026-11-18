@@ -53,12 +53,8 @@ class ProfileForm extends StatefulWidget {
 }
 
 class _ProfileFormState extends State<ProfileForm> {
-  late final TextEditingController _nickname = TextEditingController(
-    text: widget.data.nickname,
-  );
-  late final TextEditingController _bio = TextEditingController(
-    text: widget.data.bio,
-  );
+  late final TextEditingController _nickname = TextEditingController(text: widget.data.nickname);
+  late final TextEditingController _bio = TextEditingController(text: widget.data.bio);
 
   @override
   void dispose() {
@@ -80,12 +76,7 @@ class _ProfileFormState extends State<ProfileForm> {
           if (hint != null) ...[
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                hint,
-                style: t.textTheme.bodySmall?.copyWith(
-                  color: t.colorScheme.onSurfaceVariant,
-                ),
-              ),
+              child: Text(hint, style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
             ),
           ],
         ],
@@ -95,18 +86,6 @@ class _ProfileFormState extends State<ProfileForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Avatar(name: d.nickname, colorIndex: d.nickname.length, size: 64),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                '프로필 사진 등록은 다음 업데이트(사진 단계)에서 열립니다.',
-                style: t.textTheme.bodySmall,
-              ),
-            ),
-          ],
-        ),
         label('닉네임'),
         TextField(
           controller: _nickname,
@@ -134,11 +113,7 @@ class _ProfileFormState extends State<ProfileForm> {
         Wrap(
           spacing: 8,
           children: [
-            for (final e in const {
-              'male': '남성',
-              'female': '여성',
-              'other': '기타',
-            }.entries)
+            for (final e in const {'male': '남성', 'female': '여성', 'other': '기타'}.entries)
               ChoiceChip(
                 label: Text(e.value),
                 selected: d.gender == e.key,
@@ -190,9 +165,7 @@ class _ProfileFormState extends State<ProfileForm> {
           maxLength: 300,
           minLines: 3,
           maxLines: 6,
-          decoration: const InputDecoration(
-            hintText: '어떤 이야기를 나누고 싶은지 적어 보세요. 연락처는 적지 마세요.',
-          ),
+          decoration: const InputDecoration(hintText: '어떤 이야기를 나누고 싶은지 적어 보세요. 연락처는 적지 마세요.'),
           onChanged: (v) => d.bio = v,
         ),
       ],

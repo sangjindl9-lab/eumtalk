@@ -6,12 +6,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 /// 서버와의 실시간 연결. 끊기면 점점 간격을 늘려가며 다시 붙는다.
 /// 여기로 오는 것은 "알림"일 뿐이고, 놓친 메시지는 재연결 직후 REST 동기화로 채운다.
 class Realtime {
-  Realtime({
-    required this.uri,
-    required this.token,
-    required this.onEvent,
-    required this.onState,
-  });
+  Realtime({required this.uri, required this.token, required this.onEvent, required this.onState});
 
   final Uri Function() uri;
   final String token;
@@ -51,16 +46,10 @@ class Realtime {
         return;
       }
       _lastSeen = DateTime.now();
-      _sub = channel.stream.listen(
-        _onData,
-        onDone: _onLost,
-        onError: (Object _) => _onLost(),
-        cancelOnError: true,
-      );
+      _sub = channel.stream.listen(_onData, onDone: _onLost, onError: (Object _) => _onLost(), cancelOnError: true);
       channel.sink.add(jsonEncode({'type': 'auth', 'token': token}));
       _pingTimer = Timer.periodic(const Duration(seconds: 20), (_) {
-        if (DateTime.now().difference(_lastSeen) >
-            const Duration(seconds: 50)) {
+        if (DateTime.now().difference(_lastSeen) > const Duration(seconds: 50)) {
           _onLost();
           return;
         }
@@ -88,8 +77,7 @@ class Realtime {
       return;
     }
     final type = (msg['type'] ?? '') as String;
-    final data =
-        (msg['data'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+    final data = (msg['data'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
     if (type == 'pong') return;
     if (type == 'ready') {
       _attempt = 0;

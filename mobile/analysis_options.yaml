@@ -3,3 +3,5 @@ linter:
   rules:
     prefer_const_constructors: false
     use_build_context_synchronously: false
+formatter:
+  page_width: 160

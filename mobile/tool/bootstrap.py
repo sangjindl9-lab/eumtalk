@@ -74,6 +74,8 @@ if plist_path.exists():
         plist = plistlib.load(f)
     plist["CFBundleDisplayName"] = app_name
     plist["NSLocationWhenInUseUsageDescription"] = LOCATION_REASON
+    plist["NSPhotoLibraryUsageDescription"] = "프로필·대화·게시글에 올릴 사진을 고를 때 사용합니다."
+    plist["NSCameraUsageDescription"] = "프로필·대화·게시글에 올릴 사진을 찍을 때 사용합니다."
     with plist_path.open("wb") as f:
         plistlib.dump(plist, f)
     step("Info.plist: 표시 이름·위치 사용 문구 반영")

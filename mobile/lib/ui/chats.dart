@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/models.dart';
 import 'chat_page.dart';
+import 'media.dart';
 import 'nearby.dart';
 import 'profile_page.dart';
 import 'widgets.dart';
@@ -23,16 +24,10 @@ class ChatsTab extends StatelessWidget {
         icon: Icons.cloud_off_outlined,
         title: '대화 목록을 불러오지 못했어요',
         message: app.inboxError,
-        actions: [
-          FilledButton(onPressed: app.refreshInbox, child: const Text('다시 시도')),
-        ],
+        actions: [FilledButton(onPressed: app.refreshInbox, child: const Text('다시 시도'))],
       );
     } else if (app.received.isEmpty && app.conversations.isEmpty) {
-      body = const StateView(
-        icon: Icons.forum_outlined,
-        title: '아직 대화가 없어요',
-        message: '주변 탭에서 마음이 맞는 사람에게 인사를 보내 보세요. 상대가 수락하면 여기에 대화가 생깁니다.',
-      );
+      body = const StateView(icon: Icons.forum_outlined, title: '아직 대화가 없어요', message: '주변 탭에서 마음이 맞는 사람에게 인사를 보내 보세요. 상대가 수락하면 여기에 대화가 생깁니다.');
     } else {
       body = RefreshIndicator(
         onRefresh: app.refreshInbox,
@@ -40,32 +35,17 @@ class ChatsTab extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 24),
           children: [
             if (app.received.isNotEmpty) ...[
-              _SectionHeader(
-                label: '새 인사 요청',
-                count: app.received.length,
-                color: t.colorScheme.tertiary,
-              ),
+              _SectionHeader(label: '새 인사 요청', count: app.received.length, color: t.colorScheme.tertiary),
               for (final g in app.received) _GreetingTile(greeting: g),
               const SizedBox(height: 8),
             ],
-            _SectionHeader(
-              label: '대화',
-              count: app.unreadTotal,
-              color: t.colorScheme.error,
-              countSuffix: '개 안 읽음',
-            ),
+            _SectionHeader(label: '대화', count: app.unreadTotal, color: t.colorScheme.error, countSuffix: '개 안 읽음'),
             if (app.conversations.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text(
-                  '수락한 대화가 여기에 표시됩니다.',
-                  style: t.textTheme.bodyMedium?.copyWith(
-                    color: t.colorScheme.onSurfaceVariant,
-                  ),
-                ),
+                child: Text('수락한 대화가 여기에 표시됩니다.', style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
               ),
-            for (final c in app.conversations)
-              _ConversationTile(conversation: c),
+            for (final c in app.conversations) _ConversationTile(conversation: c),
           ],
         ),
       );
@@ -76,11 +56,7 @@ class ChatsTab extends StatelessWidget {
         title: const Text('대화'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const SentGreetingsPage(),
-              ),
-            ),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SentGreetingsPage())),
             child: const Text('보낸 인사'),
           ),
           const SizedBox(width: 8),
@@ -108,21 +84,13 @@ class _OfflineBar extends StatelessWidget {
       width: double.infinity,
       color: t.colorScheme.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Text(
-        '연결을 다시 시도하는 중… 작성한 메시지는 저장해 두었다가 보냅니다.',
-        style: t.textTheme.bodySmall,
-      ),
+      child: Text('연결을 다시 시도하는 중… 작성한 메시지는 저장해 두었다가 보냅니다.', style: t.textTheme.bodySmall),
     );
   }
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.label,
-    required this.count,
-    required this.color,
-    this.countSuffix = '건',
-  });
+  const _SectionHeader({required this.label, required this.count, required this.color, this.countSuffix = '건'});
   final String label;
   final int count;
   final Color color;
@@ -140,10 +108,7 @@ class _SectionHeader extends StatelessWidget {
           if (count > 0)
             Text(
               '$count$countSuffix',
-              style: t.textTheme.labelLarge?.copyWith(
-                color: color,
-                fontWeight: FontWeight.w700,
-              ),
+              style: t.textTheme.labelLarge?.copyWith(color: color, fontWeight: FontWeight.w700),
             ),
         ],
       ),
@@ -175,25 +140,22 @@ class _GreetingTile extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             child: Row(
               children: [
-                Avatar(name: s.nickname, colorIndex: s.avatarColor),
+                Avatar(name: s.nickname, colorIndex: s.avatarColor, mediaId: s.photoMediaId),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '${s.nickname} · ${s.ageBand} · ${s.proximityLabel}',
-                        style: t.textTheme.titleSmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      Text('${s.nickname} · ${s.ageBand} · ${s.proximityLabel}', style: t.textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 2),
-                      Text(
-                        greeting.body,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: t.textTheme.bodyMedium,
-                      ),
+                      if (greeting.context != null)
+                        Text(
+                          '거래 문의 · ${greeting.context!['title']}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: t.textTheme.labelMedium?.copyWith(color: t.colorScheme.tertiary, fontWeight: FontWeight.w700),
+                        ),
+                      Text(greeting.body, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.textTheme.bodyMedium),
                     ],
                   ),
                 ),
@@ -225,12 +187,7 @@ class _GreetingReviewSheetState extends State<GreetingReviewSheet> {
     final app = AppScope.read(context);
     final g = widget.greeting;
     if (action == 'block') {
-      final ok = await confirm(
-        context,
-        title: '${g.sender.nickname} 님을 차단할까요?',
-        message: '인사를 거절하고, 앞으로 이 회원의 인사·메시지·알림을 받지 않습니다.',
-        action: '차단',
-      );
+      final ok = await confirm(context, title: '${g.sender.nickname} 님을 차단할까요?', message: '인사를 거절하고, 앞으로 이 회원의 인사·메시지·알림을 받지 않습니다.', action: '차단');
       if (!ok || !mounted) return;
     }
     setState(() => _busy = true);
@@ -243,10 +200,7 @@ class _GreetingReviewSheetState extends State<GreetingReviewSheet> {
       if (action == 'accept') {
         navigator.push(
           MaterialPageRoute<void>(
-            builder: (_) => ChatPage(
-              conversationId: res['conversationId'] as String,
-              title: g.sender.nickname,
-            ),
+            builder: (_) => ChatPage(conversationId: res['conversationId'] as String, title: g.sender.nickname),
           ),
         );
       }
@@ -271,19 +225,14 @@ class _GreetingReviewSheetState extends State<GreetingReviewSheet> {
         children: [
           Row(
             children: [
-              Avatar(name: s.nickname, colorIndex: s.avatarColor, size: 60),
+              Avatar(name: s.nickname, colorIndex: s.avatarColor, size: 60, mediaId: s.photoMediaId),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(s.nickname, style: t.textTheme.titleLarge),
-                    Text(
-                      '${s.ageBand} · ${s.proximityLabel}',
-                      style: t.textTheme.bodyMedium?.copyWith(
-                        color: t.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
+                    Text('${s.ageBand} · ${s.proximityLabel}', style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                   ],
                 ),
               ),
@@ -301,51 +250,65 @@ class _GreetingReviewSheetState extends State<GreetingReviewSheet> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: t.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(16),
+            decoration: BoxDecoration(color: t.colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(16)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (g.context != null)
+                  // 어느 물건에 대한 문의인지 바로 알 수 있게 상품명·사진·가격을 함께 보여준다.
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        if (g.context!['thumbMediaId'] != null)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 10),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: MediaImage(mediaId: g.context!['thumbMediaId'] as String, width: 48, height: 48),
+                            ),
+                          ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '거래 문의',
+                                style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.tertiary, fontWeight: FontWeight.w700),
+                              ),
+                              Text('${g.context!['title']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.titleSmall),
+                              if (g.context!['price'] != null) Text(won(g.context!['price'] as num), style: t.textTheme.labelMedium),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                Text(g.body, style: t.textTheme.bodyLarge),
+              ],
             ),
-            child: Text(g.body, style: t.textTheme.bodyLarge),
           ),
-          if (s.interests.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            InterestTags(interests: s.interests, common: s.commonInterests),
-          ],
+          if (s.interests.isNotEmpty) ...[const SizedBox(height: 14), InterestTags(interests: s.interests, common: s.commonInterests)],
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             height: 52,
-            child: FilledButton(
-              onPressed: _busy ? null : () => _act('accept'),
-              child: const Text('수락하고 대화하기'),
-            ),
+            child: FilledButton(onPressed: _busy ? null : () => _act('accept'), child: const Text('수락하고 대화하기')),
           ),
           const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
-                child: OutlinedButton(
-                  onPressed: _busy ? null : () => _act('decline'),
-                  child: const Text('거절'),
-                ),
+                child: OutlinedButton(onPressed: _busy ? null : () => _act('decline'), child: const Text('거절')),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: OutlinedButton(
-                  onPressed: _busy ? null : () => _act('block'),
-                  child: const Text('차단'),
-                ),
+                child: OutlinedButton(onPressed: _busy ? null : () => _act('block'), child: const Text('차단')),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: TextButton(
-                  onPressed: _busy
-                      ? null
-                      : () => showReportSheet(
-                          context,
-                          targetType: 'greeting',
-                          targetId: g.id,
-                        ),
+                  onPressed: _busy ? null : () => showReportSheet(context, targetType: 'greeting', targetId: g.id),
                   child: const Text('신고'),
                 ),
               ),
@@ -368,17 +331,31 @@ class _ConversationTile extends StatelessWidget {
     final c = conversation;
     final waiting = app.outbox.where((p) => p.conversationId == c.id).length;
     final mine = c.lastSenderId == app.me?.userId;
-    final preview = waiting > 0
-        ? '보내지 못한 메시지 $waiting개'
-        : '${mine ? '나: ' : ''}${c.lastBody ?? ''}';
+    final preview = waiting > 0 ? '보내지 못한 메시지 $waiting개' : '${mine ? '나: ' : ''}${c.lastBody ?? ''}';
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      leading: Avatar(name: c.peerNickname, colorIndex: c.peerColor),
-      title: Text(
-        c.peerNickname,
-        style: TextStyle(
-          fontWeight: c.unreadCount > 0 ? FontWeight.w700 : FontWeight.w500,
-        ),
+      leading: Avatar(name: c.title, colorIndex: c.isGroup ? c.title.length : c.peerColor, mediaId: c.isGroup ? c.roomImage : c.peerPhoto),
+      title: Row(
+        children: [
+          Flexible(
+            child: Text(
+              c.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontWeight: c.unreadCount > 0 ? FontWeight.w700 : FontWeight.w500),
+            ),
+          ),
+          if (c.isGroup)
+            Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: Text('${c.memberCount}', style: t.textTheme.labelMedium?.copyWith(color: t.colorScheme.outline)),
+            ),
+          if (c.muted)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Icon(Icons.notifications_off_outlined, size: 14, color: t.colorScheme.outline),
+            ),
+        ],
       ),
       subtitle: Text(
         preview,
@@ -392,10 +369,7 @@ class _ConversationTile extends StatelessWidget {
         children: [
           Text(shortTime(c.updatedAt), style: t.textTheme.bodySmall),
           const SizedBox(height: 6),
-          if (c.unreadCount > 0)
-            Badge(label: Text(c.unreadCount > 99 ? '99+' : '${c.unreadCount}'))
-          else
-            const SizedBox(height: 16),
+          if (c.unreadCount > 0) Badge(label: Text(c.unreadCount > 99 ? '99+' : '${c.unreadCount}')) else const SizedBox(height: 16),
         ],
       ),
       onTap: () => Navigator.of(context).push(
@@ -426,13 +400,10 @@ class _SentGreetingsPageState extends State<SentGreetingsPage> {
 
   Future<void> _load() async {
     try {
-      final res = await AppScope.read(context).api
-          .get('/v1/greetings', query: {'box': 'sent'});
+      final res = await AppScope.read(context).api.get('/v1/greetings', query: {'box': 'sent'});
       if (!mounted) return;
       setState(() {
-        _items = (res['items'] as List)
-            .map((e) => SentGreeting.fromJson(e as Map<String, dynamic>))
-            .toList();
+        _items = (res['items'] as List).map((e) => SentGreeting.fromJson(e as Map<String, dynamic>)).toList();
         _error = null;
       });
     } catch (e) {
@@ -451,31 +422,18 @@ class _SentGreetingsPageState extends State<SentGreetingsPage> {
               icon: Icons.cloud_off_outlined,
               title: '불러오지 못했어요',
               message: _error,
-              actions: [
-                FilledButton(onPressed: _load, child: const Text('다시 시도')),
-              ],
+              actions: [FilledButton(onPressed: _load, child: const Text('다시 시도'))],
             );
     } else if (items.isEmpty) {
-      body = const StateView(
-        icon: Icons.waving_hand_outlined,
-        title: '보낸 인사가 없어요',
-        message: '최근 30일 동안 보낸 인사가 여기에 표시됩니다.',
-      );
+      body = const StateView(icon: Icons.waving_hand_outlined, title: '보낸 인사가 없어요', message: '최근 30일 동안 보낸 인사가 여기에 표시됩니다.');
     } else {
       body = ListView(
         children: [
           for (final g in items)
             ListTile(
-              leading: Avatar(
-                name: g.receiverNickname,
-                colorIndex: g.receiverColor,
-              ),
+              leading: Avatar(name: g.receiverNickname, colorIndex: g.receiverColor),
               title: Text(g.receiverNickname),
-              subtitle: Text(
-                g.body,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              subtitle: Text(g.body, maxLines: 1, overflow: TextOverflow.ellipsis),
               trailing: Text(
                 g.status == 'pending'
                     ? '답을 기다리는 중'
@@ -487,10 +445,7 @@ class _SentGreetingsPageState extends State<SentGreetingsPage> {
                   ? null
                   : () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
-                        builder: (_) => ChatPage(
-                          conversationId: g.conversationId!,
-                          title: g.receiverNickname,
-                        ),
+                        builder: (_) => ChatPage(conversationId: g.conversationId!, title: g.receiverNickname),
                       ),
                     ),
             ),

@@ -2,7 +2,9 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/api.dart';
 import '../core/models.dart';
+import 'board.dart';
 import 'chat_page.dart';
+import 'media.dart';
 import 'nearby.dart';
 import 'widgets.dart';
 
@@ -38,9 +40,7 @@ class _ProfilePageState extends State<ProfilePage> {
       if (!mounted) return;
       final rel = res['relation'] as Map<String, dynamic>;
       setState(() {
-        _profile = PublicProfile.fromJson(
-          res['profile'] as Map<String, dynamic>,
-        );
+        _profile = PublicProfile.fromJson(res['profile'] as Map<String, dynamic>);
         _conversationId = rel['conversationId'] as String?;
         _pending = rel['pendingGreeting'] as String?;
         _greetingId = rel['greetingId'] as String?;
@@ -56,10 +56,7 @@ class _ProfilePageState extends State<ProfilePage> {
   void _openChat(String conversationId) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ChatPage(
-          conversationId: conversationId,
-          title: _profile?.nickname ?? '',
-        ),
+        builder: (_) => ChatPage(conversationId: conversationId, title: _profile?.nickname ?? ''),
       ),
     );
   }
@@ -76,20 +73,14 @@ class _ProfilePageState extends State<ProfilePage> {
     if (text == null || !mounted) return;
     setState(() => _busy = true);
     try {
-      final res = await app.api.post('/v1/greetings', {
-        'toUserId': widget.userId,
-        'text': text,
-      });
+      final res = await app.api.post('/v1/greetings', {'toUserId': widget.userId, 'text': text});
       await app.refreshInbox();
       if (!mounted) return;
       final status = res['status'];
       if (status == 'sent') {
         showMessage(context, '인사를 보냈어요. 상대가 수락하면 대화가 열립니다.');
       } else {
-        showMessage(
-          context,
-          status == 'matched' ? '서로 인사를 보냈네요! 대화가 열렸습니다.' : '이미 대화 중인 회원입니다.',
-        );
+        showMessage(context, status == 'matched' ? '서로 인사를 보냈네요! 대화가 열렸습니다.' : '이미 대화 중인 회원입니다.');
         _openChat(res['conversationId'] as String);
       }
       await _load();
@@ -150,54 +141,32 @@ class _ProfilePageState extends State<ProfilePage> {
               icon: Icons.person_off_outlined,
               title: '프로필을 볼 수 없어요',
               message: _error,
-              actions: [
-                OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('돌아가기'),
-                ),
-              ],
+              actions: [OutlinedButton(onPressed: () => Navigator.of(context).pop(), child: const Text('돌아가기'))],
             )
           : const StateView.loading();
     } else {
-      final meta = [
-        p.ageBand,
-        if (p.genderLabel != null) p.genderLabel!,
-      ].join(' · ');
+      final meta = [p.ageBand, if (p.genderLabel != null) p.genderLabel!].join(' · ');
       body = ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         children: [
           Row(
             children: [
-              Avatar(name: p.nickname, colorIndex: p.avatarColor, size: 84),
+              GestureDetector(
+                onTap: p.photoMediaId == null ? null : () => openPhoto(context, p.photoMediaId!),
+                child: Avatar(name: p.nickname, colorIndex: p.avatarColor, size: 84, mediaId: p.photoMediaId),
+              ),
               const SizedBox(width: 18),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      p.nickname,
-                      style: t.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    Text(p.nickname, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 2),
-                    Text(
-                      meta,
-                      style: t.textTheme.bodyLarge?.copyWith(
-                        color: t.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
+                    Text(meta, style: t.textTheme.bodyLarge?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                     const SizedBox(height: 6),
                     Text(
-                      [
-                        p.proximityLabel,
-                        if (p.proximityLabel != p.regionName) p.regionName,
-                        if (p.activityLabel != null) p.activityLabel!,
-                      ].join(' · '),
-                      style: t.textTheme.bodyMedium?.copyWith(
-                        color: t.colorScheme.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      [p.proximityLabel, if (p.proximityLabel != p.regionName) p.regionName, if (p.activityLabel != null) p.activityLabel!].join(' · '),
+                      style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.primary, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -207,29 +176,27 @@ class _ProfilePageState extends State<ProfilePage> {
           const SizedBox(height: 24),
           Text('자기소개', style: t.textTheme.titleSmall),
           const SizedBox(height: 6),
-          Text(
-            p.bio.isEmpty ? '아직 자기소개를 쓰지 않았어요.' : p.bio,
-            style: t.textTheme.bodyLarge,
-          ),
+          Text(p.bio.isEmpty ? '아직 자기소개를 쓰지 않았어요.' : p.bio, style: t.textTheme.bodyLarge),
           const SizedBox(height: 24),
           if (p.commonInterests.isNotEmpty) ...[
-            Text(
-              '공통 관심사 ${p.commonInterests.length}개',
-              style: t.textTheme.titleSmall,
-            ),
+            Text('공통 관심사 ${p.commonInterests.length}개', style: t.textTheme.titleSmall),
             const SizedBox(height: 8),
-            InterestTags(
-              interests: p.commonInterests,
-              common: p.commonInterests,
-            ),
+            InterestTags(interests: p.commonInterests, common: p.commonInterests),
             const SizedBox(height: 20),
           ],
           Text('관심사', style: t.textTheme.titleSmall),
           const SizedBox(height: 8),
-          if (p.interests.isEmpty)
-            Text('등록한 관심사가 없어요.', style: t.textTheme.bodyMedium)
-          else
-            InterestTags(interests: p.interests, common: p.commonInterests),
+          if (p.interests.isEmpty) Text('등록한 관심사가 없어요.', style: t.textTheme.bodyMedium) else InterestTags(interests: p.interests, common: p.commonInterests),
+          const SizedBox(height: 20),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => AuthorPostsPage(userId: p.userId, nickname: p.nickname),
+              ),
+            ),
+            icon: const Icon(Icons.article_outlined),
+            label: const Text('공개 게시글 보기'),
+          ),
         ],
       );
     }
@@ -237,33 +204,15 @@ class _ProfilePageState extends State<ProfilePage> {
     Widget? action;
     if (p != null) {
       if (_conversationId != null) {
-        action = FilledButton.icon(
-          onPressed: () => _openChat(_conversationId!),
-          icon: const Icon(Icons.chat_bubble_outline),
-          label: const Text('대화 열기'),
-        );
+        action = FilledButton.icon(onPressed: () => _openChat(_conversationId!), icon: const Icon(Icons.chat_bubble_outline), label: const Text('대화 열기'));
       } else if (_pending == 'sent') {
-        action = const FilledButton(
-          onPressed: null,
-          child: Text('인사를 보냈어요 · 답을 기다리는 중'),
-        );
+        action = const FilledButton(onPressed: null, child: Text('인사를 보냈어요 · 답을 기다리는 중'));
       } else if (_pending == 'received') {
-        action = FilledButton.icon(
-          onPressed: _busy ? null : _accept,
-          icon: const Icon(Icons.check),
-          label: const Text('받은 인사 수락하고 대화하기'),
-        );
+        action = FilledButton.icon(onPressed: _busy ? null : _accept, icon: const Icon(Icons.check), label: const Text('받은 인사 수락하고 대화하기'));
       } else if (!p.acceptsGreetings) {
-        action = const FilledButton(
-          onPressed: null,
-          child: Text('새 인사를 받지 않는 회원입니다'),
-        );
+        action = const FilledButton(onPressed: null, child: Text('새 인사를 받지 않는 회원입니다'));
       } else {
-        action = FilledButton.icon(
-          onPressed: _busy ? null : _greet,
-          icon: const Icon(Icons.waving_hand_outlined),
-          label: const Text('인사 보내기'),
-        );
+        action = FilledButton.icon(onPressed: _busy ? null : _greet, icon: const Icon(Icons.waving_hand_outlined), label: const Text('인사 보내기'));
       }
     }
 
@@ -275,17 +224,10 @@ class _ProfilePageState extends State<ProfilePage> {
               onSelected: (v) {
                 if (v == 'block') _block();
                 if (v == 'report') {
-                  showReportSheet(
-                    context,
-                    targetType: 'profile',
-                    targetId: widget.userId,
-                  );
+                  showReportSheet(context, targetType: 'profile', targetId: widget.userId);
                 }
               },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'block', child: Text('차단')),
-                PopupMenuItem(value: 'report', child: Text('신고')),
-              ],
+              itemBuilder: (context) => const [PopupMenuItem(value: 'block', child: Text('차단')), PopupMenuItem(value: 'report', child: Text('신고'))],
             ),
         ],
       ),
@@ -324,22 +266,14 @@ class _GreetingSheetState extends State<_GreetingSheet> {
     final t = Theme.of(context);
     final ready = _text.text.trim().isNotEmpty;
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        0,
-        20,
-        20 + MediaQuery.of(context).viewInsets.bottom,
-      ),
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('${widget.nickname} 님에게 인사', style: t.textTheme.titleLarge),
           const SizedBox(height: 4),
-          Text(
-            '인사는 한 번만 보낼 수 있고, 상대가 수락해야 대화가 열립니다. 수락 전에는 사진과 링크를 보낼 수 없어요.',
-            style: t.textTheme.bodySmall,
-          ),
+          Text('인사는 한 번만 보낼 수 있고, 상대가 수락해야 대화가 열립니다. 수락 전에는 사진과 링크를 보낼 수 없어요.', style: t.textTheme.bodySmall),
           const SizedBox(height: 12),
           TextField(
             controller: _text,
@@ -347,20 +281,13 @@ class _GreetingSheetState extends State<_GreetingSheet> {
             maxLength: 100,
             minLines: 2,
             maxLines: 4,
-            decoration: const InputDecoration(
-              hintText: '예) 안녕하세요, 저도 등산 좋아해서 인사드려요.',
-            ),
+            decoration: const InputDecoration(hintText: '예) 안녕하세요, 저도 등산 좋아해서 인사드려요.'),
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 4),
           SizedBox(
             width: double.infinity,
-            child: FilledButton(
-              onPressed: ready
-                  ? () => Navigator.of(context).pop(_text.text.trim())
-                  : null,
-              child: const Text('인사 보내기'),
-            ),
+            child: FilledButton(onPressed: ready ? () => Navigator.of(context).pop(_text.text.trim()) : null, child: const Text('인사 보내기')),
           ),
         ],
       ),

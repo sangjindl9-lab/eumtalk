@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,21 +13,11 @@ import 'realtime.dart';
 /// 로그인 상태, 대화 목록, 인사 요청, 전송 대기열을 한곳에서 관리한다.
 class AppState extends ChangeNotifier with WidgetsBindingObserver {
   AppState(this.prefs) {
-    api = ApiClient(
-      prefs.getString(_kBaseUrl) ?? defaultBaseUrl,
-      token: prefs.getString(_kToken),
-      onUnauthorized: _onUnauthorized,
-    );
+    api = ApiClient(prefs.getString(_kBaseUrl) ?? defaultBaseUrl, token: prefs.getString(_kToken), onUnauthorized: _onUnauthorized);
   }
 
-  static const defaultBaseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:3000',
-  );
-  static const allowServerOverride = bool.fromEnvironment(
-    'ALLOW_SERVER_OVERRIDE',
-    defaultValue: true,
-  );
+  static const defaultBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:3000');
+  static const allowServerOverride = bool.fromEnvironment('ALLOW_SERVER_OVERRIDE', defaultValue: true);
   static const _kBaseUrl = 'baseUrl';
   static const _kToken = 'token';
   static const _kMe = 'me';
@@ -47,6 +38,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   List<String> ageBands = const ['20대', '30대', '40대', '50대', '60대 이상'];
   final List<PendingMessage> outbox = [];
   String? openConversationId;
+  int unreadNotices = 0;
+  final Map<String, ({String url, DateTime until})> _mediaUrls = {};
 
   final Map<String, ChatController> _chats = {};
   final Set<String> _inFlight = {};
@@ -62,9 +55,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     for (final raw in prefs.getStringList(_kOutbox) ?? const <String>[]) {
       try {
-        outbox.add(
-          PendingMessage.fromJson(jsonDecode(raw) as Map<String, dynamic>),
-        );
+        outbox.add(PendingMessage.fromJson(jsonDecode(raw) as Map<String, dynamic>));
       } catch (_) {
         // 손상된 항목은 버린다.
       }
@@ -101,12 +92,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     if (regions.isNotEmpty && interests.isNotEmpty) return;
     final r = await api.get('/v1/regions');
     final i = await api.get('/v1/interests');
-    regions = (r['items'] as List)
-        .map((e) => Region.fromJson(e as Map<String, dynamic>))
-        .toList();
-    interests = (i['items'] as List)
-        .map((e) => Interest.fromJson(e as Map<String, dynamic>))
-        .toList();
+    regions = (r['items'] as List).map((e) => Region.fromJson(e as Map<String, dynamic>)).toList();
+    interests = (i['items'] as List).map((e) => Interest.fromJson(e as Map<String, dynamic>)).toList();
     final bands = i['ageBands'];
     if (bands is List) ageBands = bands.map((e) => e.toString()).toList();
     notifyListeners();
@@ -136,12 +123,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   void _startSession() {
     _rt?.dispose();
-    _rt = Realtime(
-      uri: () => api.wsUri,
-      token: api.token!,
-      onEvent: _onEvent,
-      onState: _onRealtimeState,
-    )..start();
+    _rt = Realtime(uri: () => api.wsUri, token: api.token!, onEvent: _onEvent, onState: _onRealtimeState)..start();
     refreshInbox();
   }
 
@@ -172,8 +154,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     prefs.remove(_kToken);
     prefs.remove(_kMe);
     prefs.remove(_kOutbox);
-    for (final k
-        in prefs.getKeys().where((k) => k.startsWith('draft:')).toList()) {
+    for (final k in prefs.getKeys().where((k) => k.startsWith('draft:')).toList()) {
       prefs.remove(k);
     }
     notifyListeners();
@@ -205,12 +186,13 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     try {
       final c = await api.get('/v1/conversations');
       final g = await api.get('/v1/greetings');
-      conversations = (c['items'] as List)
-          .map((e) => Conversation.fromJson(e as Map<String, dynamic>))
-          .toList();
-      received = (g['items'] as List)
-          .map((e) => Greeting.fromJson(e as Map<String, dynamic>))
-          .toList();
+      try {
+        unreadNotices = ((await api.get('/v1/notices/unread-count'))['count'] as num).toInt();
+      } catch (_) {
+        // 통지 수는 다음 새로고침 때 다시 받는다.
+      }
+      conversations = (c['items'] as List).map((e) => Conversation.fromJson(e as Map<String, dynamic>)).toList();
+      received = (g['items'] as List).map((e) => Greeting.fromJson(e as Map<String, dynamic>)).toList();
       if (openConversationId != null) {
         for (final conv in conversations) {
           if (conv.id == openConversationId) conv.unreadCount = 0;
@@ -233,10 +215,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     return null;
   }
 
-  ChatController chat(String conversationId) => _chats.putIfAbsent(
-    conversationId,
-    () => ChatController(this, conversationId),
-  );
+  ChatController chat(String conversationId) => _chats.putIfAbsent(conversationId, () => ChatController(this, conversationId));
 
   void _onEvent(String type, Map<String, dynamic> data) {
     switch (type) {
@@ -250,9 +229,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         notifyListeners();
         break;
       case 'conversation.created':
-        final conv = Conversation.fromJson(
-          data['conversation'] as Map<String, dynamic>,
-        );
+        final conv = Conversation.fromJson(data['conversation'] as Map<String, dynamic>);
         conversations.removeWhere((c) => c.id == conv.id);
         conversations.insert(0, conv);
         notifyListeners();
@@ -275,7 +252,24 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         }
         break;
       case 'block.updated':
+      case 'room.updated':
+      case 'room.request':
         refreshInbox();
+        break;
+      case 'conversation.removed':
+        conversations.removeWhere((c) => c.id == data['conversationId']);
+        _chats.remove(data['conversationId']);
+        notifyListeners();
+        break;
+      case 'message.hidden':
+        _chats[data['conversationId']]?.setHidden(data['messageId'] as String, data['hidden'] == true);
+        refreshInbox();
+        break;
+      case 'notice.new':
+        refreshInbox();
+        break;
+      case 'account.suspended':
+        refreshMe().catchError((_) {});
         break;
       case 'session.revoked':
         _clearLocal();
@@ -293,10 +287,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
     if (m.seq > conv.lastSeq) {
       conv.lastSeq = m.seq;
-      conv.lastBody = m.body;
+      conv.lastBody = m.preview;
       conv.lastSenderId = m.senderId;
       conv.updatedAt = m.createdAt;
-      if (m.senderId != me?.userId && isNew) {
+      if (m.senderId != me?.userId && isNew && !m.isSystem) {
         if (openConversationId == conv.id) {
           chat?.markRead();
         } else {
@@ -313,28 +307,17 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   static final Random _random = Random.secure();
   static String newClientMsgId() {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    final tail = List.generate(
-      14,
-      (_) => chars[_random.nextInt(chars.length)],
-    ).join();
+    final tail = List.generate(14, (_) => chars[_random.nextInt(chars.length)]).join();
     return 'm${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}$tail';
   }
 
   void _saveOutbox() {
-    prefs.setStringList(
-      _kOutbox,
-      outbox.map((p) => jsonEncode(p.toJson())).toList(),
-    );
+    prefs.setStringList(_kOutbox, outbox.map((p) => jsonEncode(p.toJson())).toList());
   }
 
   /// 작성한 메시지를 먼저 기기에 저장한 뒤 전송한다. 통신이 끊겨도 사라지지 않는다.
-  void enqueue(String conversationId, String text) {
-    final p = PendingMessage(
-      conversationId: conversationId,
-      clientMsgId: newClientMsgId(),
-      text: text,
-      createdAt: DateTime.now(),
-    );
+  void enqueue(String conversationId, String text, {String? replyToId}) {
+    final p = PendingMessage(conversationId: conversationId, clientMsgId: newClientMsgId(), text: text, createdAt: DateTime.now(), replyToId: replyToId);
     outbox.add(p);
     _saveOutbox();
     _chats[conversationId]?.touch();
@@ -365,8 +348,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       while (true) {
         PendingMessage? next;
         for (final p in outbox) {
-          if (p.state == PendingState.queued &&
-              !_inFlight.contains(p.clientMsgId)) {
+          if (p.state == PendingState.queued && !_inFlight.contains(p.clientMsgId)) {
             next = p;
             break;
           }
@@ -385,10 +367,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     p.state = PendingState.sending;
     _chats[p.conversationId]?.touch();
     try {
-      final res = await api.post(
-        '/v1/conversations/${p.conversationId}/messages',
-        {'clientMsgId': p.clientMsgId, 'text': p.text},
-      );
+      final res = await api.post('/v1/conversations/${p.conversationId}/messages', {'clientMsgId': p.clientMsgId, 'text': p.text, 'replyToId': ?p.replyToId});
       final m = Message.fromJson(res['message'] as Map<String, dynamic>);
       outbox.remove(p);
       _saveOutbox();
@@ -413,8 +392,37 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   void notifyInbox() => notifyListeners();
 
-  String draftFor(String conversationId) =>
-      prefs.getString('draft:$conversationId') ?? '';
+  // ───────────── 사진 ─────────────
+
+  /// 권한 확인 후 발급되는 제한 시간 링크. 만료 전까지만 재사용한다.
+  Future<String?> mediaUrl(String mediaId) async {
+    final hit = _mediaUrls[mediaId];
+    if (hit != null && hit.until.isAfter(DateTime.now())) return hit.url;
+    try {
+      final res = await api.get('/v1/media/$mediaId/url');
+      final ttl = ((res['expiresInSec'] ?? 300) as num).toInt();
+      _mediaUrls[mediaId] = (url: res['url'] as String, until: DateTime.now().add(Duration(seconds: ttl - 30)));
+      return res['url'] as String;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String> uploadImage(Uint8List bytes, String purpose, {String? conversationId}) async {
+    final res = await api.postBytes('/v1/media', bytes, query: {'purpose': purpose, 'conversationId': ?conversationId});
+    return res['id'] as String;
+  }
+
+  /// 대화방에 사진 보내기(업로드 → 메시지). 같은 clientMsgId 로 재시도해도 중복되지 않는다.
+  Future<void> sendImage(String conversationId, Uint8List bytes) async {
+    final mediaId = await uploadImage(bytes, 'chat', conversationId: conversationId);
+    final res = await api.post('/v1/conversations/$conversationId/messages', {'clientMsgId': newClientMsgId(), 'mediaId': mediaId});
+    final m = Message.fromJson(res['message'] as Map<String, dynamic>);
+    _onMessage(m);
+    chat(conversationId).addServerMessage(m);
+  }
+
+  String draftFor(String conversationId) => prefs.getString('draft:$conversationId') ?? '';
   void saveDraft(String conversationId, String text) {
     if (text.isEmpty) {
       prefs.remove('draft:$conversationId');
@@ -440,10 +448,39 @@ class ChatController extends ChangeNotifier {
   bool _syncing = false;
 
   int get lastSeq => messages.isEmpty ? 0 : messages.last.seq;
-  List<PendingMessage> get pending =>
-      app.outbox.where((p) => p.conversationId == conversationId).toList();
+  List<PendingMessage> get pending => app.outbox.where((p) => p.conversationId == conversationId).toList();
 
   void touch() => notifyListeners();
+
+  void setHidden(String messageId, bool hidden) {
+    for (final m in messages) {
+      if (m.id == messageId) {
+        m.hidden = hidden;
+        if (hidden) {
+          m.body = '';
+          m.mediaId = null;
+        }
+      }
+    }
+    notifyListeners();
+    if (!hidden) reload();
+  }
+
+  /// 처음부터 다시 받는다(숨김 해제 등 내용이 바뀐 경우).
+  Future<void> reload() async {
+    messages.clear();
+    _ids.clear();
+    loaded = false;
+    await load();
+  }
+
+  Message? byId(String? id) {
+    if (id == null) return null;
+    for (final m in messages) {
+      if (m.id == id) return m;
+    }
+    return null;
+  }
 
   /// 새 메시지면 true. 이미 가진 메시지면 아무것도 하지 않는다.
   bool addServerMessage(Message m) {
@@ -465,13 +502,8 @@ class ChatController extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      final res = await app.api.get(
-        '/v1/conversations/$conversationId/messages',
-        query: {'limit': '50'},
-      );
-      final items = (res['items'] as List)
-          .map((e) => Message.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final res = await app.api.get('/v1/conversations/$conversationId/messages', query: {'limit': '50'});
+      final items = (res['items'] as List).map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
       for (final m in items) {
         addServerMessage(m);
       }
@@ -492,13 +524,8 @@ class ChatController extends ChangeNotifier {
     _syncing = true;
     try {
       while (true) {
-        final res = await app.api.get(
-          '/v1/conversations/$conversationId/messages',
-          query: {'afterSeq': '$lastSeq', 'limit': '200'},
-        );
-        final items = (res['items'] as List)
-            .map((e) => Message.fromJson(e as Map<String, dynamic>))
-            .toList();
+        final res = await app.api.get('/v1/conversations/$conversationId/messages', query: {'afterSeq': '$lastSeq', 'limit': '200'});
+        final items = (res['items'] as List).map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
         for (final m in items) {
           addServerMessage(m);
         }
@@ -517,13 +544,8 @@ class ChatController extends ChangeNotifier {
     loadingOlder = true;
     notifyListeners();
     try {
-      final res = await app.api.get(
-        '/v1/conversations/$conversationId/messages',
-        query: {'beforeSeq': '${messages.first.seq}', 'limit': '50'},
-      );
-      final items = (res['items'] as List)
-          .map((e) => Message.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final res = await app.api.get('/v1/conversations/$conversationId/messages', query: {'beforeSeq': '${messages.first.seq}', 'limit': '50'});
+      final items = (res['items'] as List).map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
       for (final m in items) {
         addServerMessage(m);
       }
@@ -545,9 +567,7 @@ class ChatController extends ChangeNotifier {
       app.notifyInbox();
     }
     try {
-      await app.api.post('/v1/conversations/$conversationId/read', {
-        'seq': lastSeq,
-      });
+      await app.api.post('/v1/conversations/$conversationId/read', {'seq': lastSeq});
     } catch (_) {
       // 읽음 위치는 다음 기회에 다시 보낸다.
     }

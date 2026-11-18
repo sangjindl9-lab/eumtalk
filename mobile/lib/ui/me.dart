@@ -3,6 +3,9 @@ import 'package:material_ui/material_ui.dart';
 import '../core/api.dart';
 import '../core/app_state.dart';
 import '../core/brand.dart';
+import 'me_more.dart';
+import 'media.dart';
+import 'points.dart';
 import 'profile_form.dart';
 import 'widgets.dart';
 
@@ -19,6 +22,48 @@ class MeTab extends StatelessWidget {
     }
   }
 
+  Future<void> _changePhoto(BuildContext context) async {
+    final app = AppScope.read(context);
+    final bytes = await pickPhoto(context);
+    if (bytes == null || !context.mounted) return;
+    try {
+      final id = await app.uploadImage(bytes, 'profile');
+      await app.updateMe({'photoMediaId': id});
+    } catch (e) {
+      if (context.mounted) showMessage(context, e.toString());
+    }
+  }
+
+  /// 다른 지역 둘러보기(유료): 결제 전에 지역·기간·소모 포인트를 보여준다.
+  Future<void> _browse(BuildContext context) async {
+    final app = AppScope.read(context);
+    await app.loadCatalog().catchError((_) {});
+    if (!context.mounted) return;
+    final region = await pickRegion(context);
+    if (region == null || !context.mounted) return;
+    try {
+      final active = app.me?.browse != null;
+      final q = active ? null : await app.api.post('/v1/me/browse/quote');
+      if (!context.mounted) return;
+      final ok = await confirm(
+        context,
+        title: '${region.name} 둘러보기',
+        message: active
+            ? '이용 중인 둘러보기 지역을 바꿉니다. 추가 포인트는 들지 않습니다.'
+            : '24시간 동안 ${region.name} 회원을 볼 수 있습니다.\n소모 포인트: ${comma(q!['cost'] as num)}P (보유 ${comma(q['balance'] as num)}P)\n그 지역 회원에게는 "이 지역 둘러보는 중"으로 표시됩니다.',
+        action: '둘러보기',
+      );
+      if (!ok) return;
+      await app.api.post('/v1/me/browse', {'regionId': region.id});
+      await app.refreshMe();
+      if (context.mounted) showMessage(context, '주변 탭의 찾기 조건에서 ${region.name}을(를) 고를 수 있어요.');
+    } on ApiException catch (e) {
+      if (context.mounted) showMessage(context, e.message);
+    } on NetworkException catch (e) {
+      if (context.mounted) showMessage(context, e.toString());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
@@ -26,19 +71,40 @@ class MeTab extends StatelessWidget {
     final t = Theme.of(context);
     if (me == null) return const Scaffold(body: StateView.loading());
 
-    void open(Widget page) =>
-        Navigator.of(context)
-            .push(MaterialPageRoute<void>(builder: (_) => page));
+    void open(Widget page) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
     Widget header(String text) => Padding(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 4),
-      child: Text(
-        text,
-        style: t.textTheme.titleSmall?.copyWith(color: t.colorScheme.primary),
-      ),
+      child: Text(text, style: t.textTheme.titleSmall?.copyWith(color: t.colorScheme.primary)),
     );
+    Widget link(IconData icon, String title, Widget page, {String? subtitle, Widget? trailing}) => ListTile(
+      leading: Icon(icon),
+      title: Text(title),
+      subtitle: subtitle == null ? null : Text(subtitle),
+      trailing: trailing ?? const Icon(Icons.chevron_right),
+      onTap: () => open(page),
+    );
+    final browse = me.browse;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('내 정보')),
+      appBar: AppBar(
+        title: const Text('내 정보'),
+        actions: [
+          Badge(
+            isLabelVisible: app.unreadNotices > 0,
+            label: Text('${app.unreadNotices}'),
+            offset: const Offset(-6, 6),
+            child: IconButton(
+              icon: const Icon(Icons.notifications_none),
+              tooltip: '알림',
+              onPressed: () async {
+                await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const NoticesPage()));
+                app.refreshInbox();
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: ContentWidth(
         child: ListView(
           padding: const EdgeInsets.only(bottom: 32),
@@ -50,39 +116,63 @@ class MeTab extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   child: Row(
                     children: [
-                      Avatar(
-                        name: me.nickname,
-                        colorIndex: me.avatarColor,
-                        size: 64,
+                      GestureDetector(
+                        onTap: () => _changePhoto(context),
+                        child: Stack(
+                          children: [
+                            Avatar(name: me.nickname, colorIndex: me.avatarColor, size: 64, mediaId: me.photoMediaId),
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: CircleAvatar(
+                                radius: 11,
+                                backgroundColor: t.colorScheme.surface,
+                                child: Icon(Icons.photo_camera_outlined, size: 14, color: t.colorScheme.onSurface),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              me.nickname,
-                              style: t.textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            Text(
-                              '${me.ageBand} · ${me.regionName}',
-                              style: t.textTheme.bodyMedium?.copyWith(
-                                color: t.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
+                            Text(me.nickname, style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                            Text('${me.ageBand} · ${me.regionName}', style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                           ],
                         ),
                       ),
-                      FilledButton.tonal(
-                        onPressed: () => open(const EditProfilePage()),
-                        child: const Text('수정'),
-                      ),
+                      FilledButton.tonal(onPressed: () => open(const EditProfilePage()), child: const Text('수정')),
                     ],
                   ),
                 ),
               ),
+            ),
+            header('포인트·이용권'),
+            link(Icons.toll_outlined, '포인트·프리미엄', const PointsPage(), subtitle: '충전, 구독, 사용 내역'),
+            ListTile(
+              leading: const Icon(Icons.travel_explore_outlined),
+              title: const Text('다른 지역 둘러보기'),
+              subtitle: Text(
+                browse == null
+                    ? '24시간 동안 다른 지역 회원을 볼 수 있어요.'
+                    : '${browse['regionName']} 둘러보는 중 · ${shortTime(DateTime.parse(browse['until'] as String).toLocal())}까지',
+              ),
+              trailing: browse == null
+                  ? const Icon(Icons.chevron_right)
+                  : TextButton(
+                      onPressed: () async {
+                        try {
+                          await app.api.delete('/v1/me/browse');
+                          await app.refreshMe();
+                        } catch (e) {
+                          if (context.mounted) showMessage(context, e.toString());
+                        }
+                      },
+                      child: const Text('그만 보기'),
+                    ),
+              onTap: () => _browse(context),
             ),
             header('공개 범위'),
             SwitchListTile(
@@ -105,11 +195,7 @@ class MeTab extends StatelessWidget {
             ),
             ListTile(
               title: const Text('내 주변 찾기(위치)'),
-              subtitle: Text(
-                me.locationShared
-                    ? '사용 중 · 대략적인 위치만 서버에 저장됩니다.'
-                    : '꺼짐 · ${me.regionName} 기준으로 보여드립니다. 주변 탭에서 켤 수 있어요.',
-              ),
+              subtitle: Text(me.locationShared ? '사용 중 · 대략적인 위치만 서버에 저장됩니다.' : '꺼짐 · ${me.regionName} 기준으로 보여드립니다. 주변 탭에서 켤 수 있어요.'),
               trailing: me.locationShared
                   ? TextButton(
                       onPressed: () async {
@@ -117,71 +203,44 @@ class MeTab extends StatelessWidget {
                           await app.api.delete('/v1/me/location');
                           await app.refreshMe();
                         } catch (e) {
-                          if (context.mounted) {
-                            showMessage(context, e.toString());
-                          }
+                          if (context.mounted) showMessage(context, e.toString());
                         }
                       },
                       child: const Text('끄고 삭제'),
                     )
                   : null,
             ),
+            header('알림'),
+            SwitchListTile(
+              title: const Text('알림에 메시지 내용 표시'),
+              subtitle: const Text('끄면 잠금화면 알림에 "새 메시지가 도착했습니다"만 보입니다.'),
+              value: me.pushPreview,
+              onChanged: (v) => _setting(context, 'pushPreview', v),
+            ),
             header('안전'),
-            ListTile(
-              leading: const Icon(Icons.block_outlined),
-              title: const Text('차단 목록'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => open(const BlockListPage()),
-            ),
+            link(Icons.block_outlined, '차단 목록', const BlockListPage()),
+            link(Icons.gavel_outlined, '조치 내역·이의신청', const SanctionsPage()),
             header('안내'),
-            ListTile(
-              leading: const Icon(Icons.business_outlined),
-              title: const Text('운영자 정보·연락처'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => open(const InfoPage(kind: InfoKind.operator)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.rule_outlined),
-              title: const Text('이용규칙'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => open(const InfoPage(kind: InfoKind.rules)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.privacy_tip_outlined),
-              title: const Text('개인정보 처리 안내'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => open(const InfoPage(kind: InfoKind.privacy)),
-            ),
+            link(Icons.campaign_outlined, '운영 공지', const AnnouncementsPage()),
+            link(Icons.support_agent_outlined, '문의', const InquiriesPage()),
+            link(Icons.business_outlined, '운영자 정보·연락처', const InfoPage(kind: InfoKind.operator)),
+            link(Icons.rule_outlined, '이용규칙', const InfoPage(kind: InfoKind.rules)),
+            link(Icons.privacy_tip_outlined, '개인정보 처리 안내', const InfoPage(kind: InfoKind.privacy)),
             header('계정'),
             ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('로그아웃'),
               onTap: () async {
-                if (await confirm(
-                  context,
-                  title: '로그아웃할까요?',
-                  message: '보내지 못한 메시지와 작성 중인 내용은 이 기기에서 지워집니다.',
-                  action: '로그아웃',
-                )) {
+                if (await confirm(context, title: '로그아웃할까요?', message: '보내지 못한 메시지와 작성 중인 내용은 이 기기에서 지워집니다.', action: '로그아웃')) {
                   await app.logout();
                 }
               },
             ),
-            const ListTile(
-              enabled: false,
-              leading: Icon(Icons.person_remove_outlined),
-              title: Text('계정 삭제 신청'),
-              subtitle: Text('신고·관리자 단계에서 함께 제공됩니다.'),
-            ),
+            link(Icons.person_remove_outlined, '계정 삭제 신청', const DeleteAccountPage()),
             if (AppState.allowServerOverride)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                child: Text(
-                  '시험 서버: ${app.baseUrl}',
-                  style: t.textTheme.bodySmall?.copyWith(
-                    color: t.colorScheme.outline,
-                  ),
-                ),
+                child: Text('시험 서버: ${app.baseUrl}', style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.outline)),
               ),
           ],
         ),
@@ -247,9 +306,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
               ? const StateView.loading()
               : ListView(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                  children: [
-                    ProfileForm(data: _form!, onChanged: () => setState(() {})),
-                  ],
+                  children: [ProfileForm(data: _form!, onChanged: () => setState(() {}))],
                 ),
         ),
       ),
@@ -310,9 +367,7 @@ class _BlockListPageState extends State<BlockListPage> {
               icon: Icons.cloud_off_outlined,
               title: '불러오지 못했어요',
               message: _error,
-              actions: [
-                FilledButton(onPressed: _load, child: const Text('다시 시도')),
-              ],
+              actions: [FilledButton(onPressed: _load, child: const Text('다시 시도'))],
             );
     } else if (items.isEmpty) {
       body = const StateView(icon: Icons.block_outlined, title: '차단한 회원이 없어요');
@@ -321,15 +376,9 @@ class _BlockListPageState extends State<BlockListPage> {
         children: [
           for (final b in items)
             ListTile(
-              leading: Avatar(
-                name: (b['nickname'] ?? '') as String,
-                colorIndex: (b['avatarColor'] ?? 0) as int,
-              ),
+              leading: Avatar(name: (b['nickname'] ?? '') as String, colorIndex: (b['avatarColor'] ?? 0) as int),
               title: Text((b['nickname'] ?? '') as String),
-              trailing: OutlinedButton(
-                onPressed: () => _unblock(b['userId'] as String),
-                child: const Text('해제'),
-              ),
+              trailing: OutlinedButton(onPressed: () => _unblock(b['userId'] as String), child: const Text('해제')),
             ),
         ],
       );
@@ -371,10 +420,7 @@ class InfoPage extends StatelessWidget {
         rows = const [
           ('성인 전용', '휴대폰 인증과 성인 확인을 마친 회원만 이용할 수 있습니다.'),
           ('금지 행위', '성적 접근·거래 유도, 사기, 욕설·괴롭힘, 스팸·광고, 사칭, 타인의 개인정보 노출은 금지됩니다.'),
-          (
-            '인사와 대화',
-            '인사는 한 사람에게 한 번 보낼 수 있고, 상대가 수락해야 대화가 열립니다. 수락 전에는 사진과 링크를 보낼 수 없습니다.',
-          ),
+          ('인사와 대화', '인사는 한 사람에게 한 번 보낼 수 있고, 상대가 수락해야 대화가 열립니다. 수락 전에는 사진과 링크를 보낼 수 없습니다.'),
           ('신고와 차단', '프로필·인사·메시지를 바로 신고할 수 있고, 차단하면 즉시 서로 보이지 않습니다.'),
           ('조치', '규칙을 어기면 경고, 콘텐츠 숨김, 이용 정지 조치를 받을 수 있습니다.'),
         ];
@@ -383,15 +429,9 @@ class InfoPage extends StatelessWidget {
         title = '개인정보 처리 안내';
         rows = const [
           ('공개되지 않는 정보', '휴대폰 번호, 실명, 생년월일은 다른 회원에게 표시되지 않습니다.'),
-          (
-            '위치',
-            '"내 주변 찾기"를 켠 경우에만 대략적인 위치(약 500m 단위)를 저장하며, 좌표와 정확한 거리는 누구에게도 제공하지 않습니다. 언제든 끄고 삭제할 수 있습니다.',
-          ),
-          (
-            '대화 내용',
-            '운영자는 개인 대화를 임의로 열람하지 않습니다. 신고가 접수된 경우 해당 신고의 증거만 담당자가 확인하며 열람 기록이 남습니다.',
-          ),
-          ('보관과 삭제', '계정 삭제 절차와 항목별 보존 기간은 정식 출시 전 확정해 이 화면에 안내합니다.'),
+          ('위치', '"내 주변 찾기"를 켠 경우에만 대략적인 위치(약 500m 단위)를 저장하며, 좌표와 정확한 거리는 누구에게도 제공하지 않습니다. 언제든 끄고 삭제할 수 있습니다.'),
+          ('대화 내용', '운영자는 개인 대화를 임의로 열람하지 않습니다. 신고가 접수된 경우 해당 신고의 증거만 담당자가 확인하며 열람 기록이 남습니다.'),
+          ('보관과 삭제', '계정을 삭제하면 프로필·사진·푸시 수신 정보·휴대폰 번호는 바로 지워지고, 신고·조치 기록과 포인트·구매 내역은 분쟁 대응과 법정 보존을 위해 남습니다. 항목별 보존 기간은 정식 출시 전 확정해 안내합니다.'),
         ];
         break;
     }
@@ -414,12 +454,7 @@ class InfoPage extends StatelessWidget {
                 ),
               ),
             if (kind != InfoKind.operator)
-              Text(
-                '시험 버전용 초안입니다. 정식 출시 전 법무 검토를 거친 전문으로 교체됩니다.',
-                style: t.textTheme.bodySmall?.copyWith(
-                  color: t.colorScheme.outline,
-                ),
-              ),
+              Text('시험 버전용 초안입니다. 정식 출시 전 법무 검토를 거친 전문으로 교체됩니다.', style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.outline)),
           ],
         ),
       ),

@@ -61,9 +61,7 @@ class _NearbyTabState extends State<NearbyTab> {
       final res = await app.api.get('/v1/nearby', query: _query(0));
       if (!mounted) return;
       setState(() {
-        _items = (res['items'] as List)
-            .map((e) => PublicProfile.fromJson(e as Map<String, dynamic>))
-            .toList();
+        _items = (res['items'] as List).map((e) => PublicProfile.fromJson(e as Map<String, dynamic>)).toList();
         _hasMore = res['hasMore'] == true;
         _suggestWiden = res['suggestWiden'] == true;
         _loading = false;
@@ -92,9 +90,7 @@ class _NearbyTabState extends State<NearbyTab> {
     try {
       final res = await app.api.get('/v1/nearby', query: _query(_items.length));
       if (!mounted) return;
-      final more = (res['items'] as List)
-          .map((e) => PublicProfile.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final more = (res['items'] as List).map((e) => PublicProfile.fromJson(e as Map<String, dynamic>)).toList();
       final have = _items.map((p) => p.userId).toSet();
       setState(() {
         _items = [..._items, ...more.where((p) => !have.contains(p.userId))];
@@ -127,15 +123,9 @@ class _NearbyTabState extends State<NearbyTab> {
           notice = _LocationNotice.deniedForever;
         } else {
           final pos = await Geolocator.getCurrentPosition(
-            locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.low,
-              timeLimit: Duration(seconds: 12),
-            ),
+            locationSettings: const LocationSettings(accuracy: LocationAccuracy.low, timeLimit: Duration(seconds: 12)),
           );
-          await app.api.put('/v1/me/location', {
-            'lat': pos.latitude,
-            'lng': pos.longitude,
-          });
+          await app.api.put('/v1/me/location', {'lat': pos.latitude, 'lng': pos.longitude});
           await app.refreshMe();
         }
       }
@@ -151,6 +141,81 @@ class _NearbyTabState extends State<NearbyTab> {
       _notice = notice;
     });
     if (notice == _LocationNotice.none) _load();
+  }
+
+  /// 다중 인사(유료): 보내기 전에 대상 수와 포인트 비용을 보여주고, 실제 발송분만 차감된다.
+  Future<void> _multiGreet() async {
+    final app = AppScope.read(context);
+    final filter = {
+      'scope': _scope,
+      if (_ageBands.isNotEmpty) 'ageBands': _ageBands.toList(),
+      if (_interestIds.isNotEmpty) 'interestIds': _interestIds.toList(),
+    };
+    Map<String, dynamic> preview;
+    try {
+      preview = await app.api.post('/v1/greetings/multi/preview', {'filter': filter});
+    } catch (e) {
+      if (mounted) showMessage(context, e.toString());
+      return;
+    }
+    if (!mounted) return;
+    final count = (preview['targetCount'] as num).toInt();
+    if (count == 0) {
+      showMessage(context, '지금 조건에서는 새로 인사를 보낼 수 있는 회원이 없어요.');
+      return;
+    }
+    final c = TextEditingController();
+    final text = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (sheet) {
+        final t = Theme.of(sheet);
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.of(sheet).viewInsets.bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('여러 명에게 인사', style: t.textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(
+                '받는 사람 $count명 · ${comma(preview['cost'] as num)}P (1명당 ${preview['unitPrice']}P, 보유 ${comma(preview['balance'] as num)}P)',
+                style: t.textTheme.titleSmall,
+              ),
+              const SizedBox(height: 4),
+              Text('지금 찾기 조건에 맞고 새 인사를 받는 회원에게만 보냅니다. 수신 거부·차단·이미 대화 중인 회원은 빠지고, 실제로 보낸 만큼만 차감됩니다.', style: t.textTheme.bodySmall),
+              const SizedBox(height: 12),
+              TextField(
+                controller: c,
+                autofocus: true,
+                maxLength: 100,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(hintText: '인사말 (링크는 넣을 수 없어요)'),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: preview['enough'] == true ? () => Navigator.of(sheet).pop(c.text.trim()) : null,
+                  child: Text(preview['enough'] == true ? '보내기' : '포인트가 부족해요'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (text == null || text.isEmpty || !mounted) return;
+    try {
+      final res = await app.api.post('/v1/greetings/multi', {'text': text, 'filter': filter});
+      if (mounted) showMessage(context, '${res['sentCount']}명에게 인사를 보냈어요. ${comma(res['cost'] as num)}P 사용, 남은 포인트 ${comma(res['balance'] as num)}P');
+    } on ApiException catch (e) {
+      if (mounted) showMessage(context, e.message);
+    } on NetworkException catch (e) {
+      if (mounted) showMessage(context, e.toString());
+    }
   }
 
   void _widen() {
@@ -226,6 +291,24 @@ class _NearbyTabState extends State<NearbyTab> {
                         for (final r in app.regions) {
                           if (r.id == me?.regionId) sido = r.sido;
                         }
+                        // 내 시·도 안에서는 자유롭게, 둘러보기 이용 중이면 그 지역도 바로 고를 수 있다.
+                        final browse = app.me?.browse;
+                        if (browse != null) {
+                          final useBrowse = await confirm(
+                            context,
+                            title: '${browse['regionName']} 보기',
+                            message: '둘러보기 이용 중인 지역을 볼까요? 취소하면 내 시·도 안에서 고릅니다.',
+                            action: '이 지역 보기',
+                          );
+                          if (useBrowse) {
+                            update(() {
+                              _regionId = browse['regionId'] as String;
+                              _regionName = browse['regionName'] as String;
+                            });
+                            return;
+                          }
+                          if (!context.mounted) return;
+                        }
                         final r = await pickRegion(context, onlySido: sido);
                         if (r != null) {
                           update(() {
@@ -238,12 +321,7 @@ class _NearbyTabState extends State<NearbyTab> {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  '다른 시·도 둘러보기는 준비 중입니다.',
-                  style: t.textTheme.bodySmall?.copyWith(
-                    color: t.colorScheme.onSurfaceVariant,
-                  ),
-                ),
+                Text('다른 시·도 둘러보기는 준비 중입니다.', style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                 const SizedBox(height: 16),
                 Text('연령대', style: t.textTheme.titleSmall),
                 const SizedBox(height: 8),
@@ -255,9 +333,7 @@ class _NearbyTabState extends State<NearbyTab> {
                       FilterChip(
                         label: Text(b),
                         selected: _ageBands.contains(b),
-                        onSelected: (on) => update(
-                          () => on ? _ageBands.add(b) : _ageBands.remove(b),
-                        ),
+                        onSelected: (on) => update(() => on ? _ageBands.add(b) : _ageBands.remove(b)),
                       ),
                   ],
                 ),
@@ -272,11 +348,7 @@ class _NearbyTabState extends State<NearbyTab> {
                       FilterChip(
                         label: Text(i.name),
                         selected: _interestIds.contains(i.id),
-                        onSelected: (on) => update(
-                          () => on
-                              ? _interestIds.add(i.id)
-                              : _interestIds.remove(i.id),
-                        ),
+                        onSelected: (on) => update(() => on ? _interestIds.add(i.id) : _interestIds.remove(i.id)),
                       ),
                   ],
                 ),
@@ -294,10 +366,7 @@ class _NearbyTabState extends State<NearbyTab> {
                       child: const Text('초기화'),
                     ),
                     const Spacer(),
-                    FilledButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('이 조건으로 보기'),
-                    ),
+                    FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('이 조건으로 보기')),
                   ],
                 ),
               ],
@@ -325,51 +394,31 @@ class _NearbyTabState extends State<NearbyTab> {
         body = '괜찮아요. 직접 고른 지역($region) 기준으로 보여드립니다.';
         actions = [
           if (_notice == _LocationNotice.deniedForever)
-            TextButton(
-              onPressed: Geolocator.openAppSettings,
-              child: const Text('설정 열기'),
-            )
+            TextButton(onPressed: Geolocator.openAppSettings, child: const Text('설정 열기'))
           else
             TextButton(onPressed: _enableLocation, child: const Text('다시 묻기')),
-          TextButton(
-            onPressed: () => setState(() => _bannerDismissed = true),
-            child: const Text('닫기'),
-          ),
+          TextButton(onPressed: () => setState(() => _bannerDismissed = true), child: const Text('닫기')),
         ];
         break;
       case _LocationNotice.serviceOff:
         title = '기기의 위치 서비스가 꺼져 있어요';
         body = '켜지 않아도 $region 기준으로 계속 이용할 수 있습니다.';
         actions = [
-          TextButton(
-            onPressed: Geolocator.openLocationSettings,
-            child: const Text('위치 설정'),
-          ),
-          TextButton(
-            onPressed: () => setState(() => _bannerDismissed = true),
-            child: const Text('닫기'),
-          ),
+          TextButton(onPressed: Geolocator.openLocationSettings, child: const Text('위치 설정')),
+          TextButton(onPressed: () => setState(() => _bannerDismissed = true), child: const Text('닫기')),
         ];
         break;
       case _LocationNotice.failed:
         title = '현재 위치를 확인하지 못했어요';
         body = '$region 기준으로 보여드리고 있습니다.';
-        actions = [
-          TextButton(onPressed: _enableLocation, child: const Text('다시 시도')),
-        ];
+        actions = [TextButton(onPressed: _enableLocation, child: const Text('다시 시도'))];
         break;
       case _LocationNotice.none:
         title = '내 주변 찾기';
         body = '위치를 허용하면 같은 동네 회원을 먼저 보여드려요. 정확한 위치와 거리는 누구에게도 표시되지 않습니다.';
         actions = [
-          FilledButton.tonal(
-            onPressed: _locating ? null : _enableLocation,
-            child: Text(_locating ? '확인 중…' : '위치 사용하기'),
-          ),
-          TextButton(
-            onPressed: () => setState(() => _bannerDismissed = true),
-            child: Text('$region(으)로 계속'),
-          ),
+          FilledButton.tonal(onPressed: _locating ? null : _enableLocation, child: Text(_locating ? '확인 중…' : '위치 사용하기')),
+          TextButton(onPressed: () => setState(() => _bannerDismissed = true), child: Text('$region(으)로 계속')),
         ];
         break;
     }
@@ -381,19 +430,9 @@ class _NearbyTabState extends State<NearbyTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: t.textTheme.titleSmall?.copyWith(
-                color: t.colorScheme.onSecondaryContainer,
-              ),
-            ),
+            Text(title, style: t.textTheme.titleSmall?.copyWith(color: t.colorScheme.onSecondaryContainer)),
             const SizedBox(height: 4),
-            Text(
-              body,
-              style: t.textTheme.bodySmall?.copyWith(
-                color: t.colorScheme.onSecondaryContainer,
-              ),
-            ),
+            Text(body, style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSecondaryContainer)),
             Wrap(alignment: WrapAlignment.end, children: actions),
           ],
         ),
@@ -404,10 +443,7 @@ class _NearbyTabState extends State<NearbyTab> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final filterCount =
-        _ageBands.length +
-        _interestIds.length +
-        (_regionId != null || _scope != 'near' ? 1 : 0);
+    final filterCount = _ageBands.length + _interestIds.length + (_regionId != null || _scope != 'near' ? 1 : 0);
     final banner = _locationBanner(context);
 
     Widget content;
@@ -426,12 +462,8 @@ class _NearbyTabState extends State<NearbyTab> {
         title: '조건에 맞는 회원이 아직 없어요',
         message: '탐색 범위를 넓히거나 관심사 모임에서 사람들을 만나 보세요.',
         actions: [
-          if (_scope != 'all' || _regionId != null)
-            FilledButton(onPressed: _widen, child: const Text('탐색 범위 넓히기')),
-          OutlinedButton(
-            onPressed: widget.onFindGroups,
-            child: const Text('관심사 모임 찾기'),
-          ),
+          if (_scope != 'all' || _regionId != null) FilledButton(onPressed: _widen, child: const Text('탐색 범위 넓히기')),
+          OutlinedButton(onPressed: widget.onFindGroups, child: const Text('관심사 모임 찾기')),
         ],
       );
     } else {
@@ -467,22 +499,13 @@ class _NearbyTabState extends State<NearbyTab> {
                         children: [
                           Text('주변에 회원이 많지 않아요', style: t.textTheme.titleSmall),
                           const SizedBox(height: 4),
-                          Text(
-                            '범위를 넓히거나 관심사 모임을 찾아보세요.',
-                            style: t.textTheme.bodySmall,
-                          ),
+                          Text('범위를 넓히거나 관심사 모임을 찾아보세요.', style: t.textTheme.bodySmall),
                           const SizedBox(height: 8),
                           Wrap(
                             spacing: 8,
                             children: [
-                              FilledButton.tonal(
-                                onPressed: _widen,
-                                child: const Text('탐색 범위 넓히기'),
-                              ),
-                              TextButton(
-                                onPressed: widget.onFindGroups,
-                                child: const Text('관심사 모임 찾기'),
-                              ),
+                              FilledButton.tonal(onPressed: _widen, child: const Text('탐색 범위 넓히기')),
+                              TextButton(onPressed: widget.onFindGroups, child: const Text('관심사 모임 찾기')),
                             ],
                           ),
                         ],
@@ -502,15 +525,12 @@ class _NearbyTabState extends State<NearbyTab> {
       appBar: AppBar(
         title: const Text('주변'),
         actions: [
+          IconButton(onPressed: _multiGreet, icon: const Icon(Icons.campaign_outlined), tooltip: '여러 명에게 인사'),
           Badge(
             isLabelVisible: filterCount > 0,
             label: Text('$filterCount'),
             offset: const Offset(-6, 6),
-            child: IconButton(
-              onPressed: _openFilters,
-              icon: const Icon(Icons.tune),
-              tooltip: '찾기 조건',
-            ),
+            child: IconButton(onPressed: _openFilters, icon: const Icon(Icons.tune), tooltip: '찾기 조건'),
           ),
           const SizedBox(width: 8),
         ],
@@ -539,11 +559,7 @@ class _NearbyTabState extends State<NearbyTab> {
                 ],
               ),
             ),
-            if (banner != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child: banner,
-              ),
+            if (banner != null) Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 10), child: banner),
             Expanded(child: content),
           ],
         ),
@@ -561,14 +577,8 @@ class _PersonCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final p = profile;
-    final meta = [
-      p.ageBand,
-      if (p.genderLabel != null) p.genderLabel!,
-    ].join(' · ');
-    final place = [
-      p.proximityLabel,
-      if (p.proximity != 'far' && p.proximity != 'same_region') p.regionName,
-    ].join(' · ');
+    final meta = [p.ageBand, if (p.genderLabel != null) p.genderLabel!].join(' · ');
+    final place = [p.proximityLabel, if (p.proximity != 'far' && p.proximity != 'same_region') p.regionName].join(' · ');
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -585,7 +595,7 @@ class _PersonCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Avatar(name: p.nickname, colorIndex: p.avatarColor, size: 56),
+              Avatar(name: p.nickname, colorIndex: p.avatarColor, size: 56, mediaId: p.photoMediaId),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -595,18 +605,8 @@ class _PersonCard extends StatelessWidget {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       spacing: 8,
                       children: [
-                        Text(
-                          p.nickname,
-                          style: t.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Text(
-                          meta,
-                          style: t.textTheme.bodyMedium?.copyWith(
-                            color: t.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
+                        Text(p.nickname, style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                        Text(meta, style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                       ],
                     ),
                     const SizedBox(height: 2),
@@ -614,43 +614,19 @@ class _PersonCard extends StatelessWidget {
                       spacing: 6,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Icon(
-                          Icons.place_outlined,
-                          size: 15,
-                          color: t.colorScheme.primary,
-                        ),
+                        Icon(Icons.place_outlined, size: 15, color: t.colorScheme.primary),
                         Text(
                           place,
-                          style: t.textTheme.bodySmall?.copyWith(
-                            color: t.colorScheme.primary,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.primary, fontWeight: FontWeight.w600),
                         ),
                         if (p.activityLabel != null)
-                          Text(
-                            '· ${p.activityLabel}',
-                            style: t.textTheme.bodySmall?.copyWith(
-                              color: t.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
+                          Text('· ${p.activityLabel}', style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                       ],
                     ),
-                    if (p.interests.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      InterestTags(
-                        interests: p.interests,
-                        common: p.commonInterests,
-                        max: 5,
-                      ),
-                    ],
+                    if (p.interests.isNotEmpty) ...[const SizedBox(height: 8), InterestTags(interests: p.interests, common: p.commonInterests, max: 5)],
                     if (p.bio.isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      Text(
-                        p.bio,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: t.textTheme.bodyMedium,
-                      ),
+                      Text(p.bio, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.textTheme.bodyMedium),
                     ],
                   ],
                 ),
@@ -665,12 +641,7 @@ class _PersonCard extends StatelessWidget {
 
 /// 관심사 태그. 나와 겹치는 관심사는 채워진 색으로 강조한다.
 class InterestTags extends StatelessWidget {
-  const InterestTags({
-    super.key,
-    required this.interests,
-    required this.common,
-    this.max,
-  });
+  const InterestTags({super.key, required this.interests, required this.common, this.max});
   final List<String> interests;
   final List<String> common;
   final int? max;
@@ -685,27 +656,11 @@ class InterestTags extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: highlight ? t.colorScheme.primaryContainer : Colors.transparent,
-        border: Border.all(
-          color: highlight ? Colors.transparent : t.colorScheme.outlineVariant,
-        ),
+        border: Border.all(color: highlight ? Colors.transparent : t.colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        text,
-        style: t.textTheme.labelMedium?.copyWith(
-          color: highlight
-              ? t.colorScheme.onPrimaryContainer
-              : t.colorScheme.onSurfaceVariant,
-        ),
-      ),
+      child: Text(text, style: t.textTheme.labelMedium?.copyWith(color: highlight ? t.colorScheme.onPrimaryContainer : t.colorScheme.onSurfaceVariant)),
     );
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: [
-        for (final i in shown) tag(i, common.contains(i)),
-        if (rest > 0) tag('+$rest', false),
-      ],
-    );
+    return Wrap(spacing: 6, runSpacing: 6, children: [for (final i in shown) tag(i, common.contains(i)), if (rest > 0) tag('+$rest', false)]);
   }
 }

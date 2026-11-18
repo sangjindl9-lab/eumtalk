@@ -51,27 +51,16 @@ class _EumTalkAppState extends State<EumTalkApp> {
 
   ThemeData _theme(Brightness brightness) {
     final brand = Brand.instance;
-    final scheme = ColorScheme.fromSeed(
-      seedColor: brand.seed,
-      tertiary: brand.accent,
-      brightness: brightness,
-    );
+    final scheme = ColorScheme.fromSeed(seedColor: brand.seed, tertiary: brand.accent, brightness: brightness);
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor: scheme.surface,
-      appBarTheme: AppBarTheme(
-        backgroundColor: scheme.surface,
-        surfaceTintColor: Colors.transparent,
-        centerTitle: false,
-      ),
+      appBarTheme: AppBarTheme(backgroundColor: scheme.surface, surfaceTintColor: Colors.transparent, centerTitle: false),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: scheme.surfaceContainerHighest.withAlpha(120),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
       ),
       cardTheme: CardThemeData(
         elevation: 0,
@@ -101,9 +90,7 @@ class _EumTalkAppState extends State<EumTalkApp> {
           builder: (context, _) {
             final app = widget.app;
             if (app.booting) {
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
-              );
+              return const Scaffold(body: Center(child: CircularProgressIndicator()));
             }
             return app.signedIn ? const HomeShell() : const IntroPage();
           },

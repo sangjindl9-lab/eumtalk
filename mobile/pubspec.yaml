@@ -1,7 +1,7 @@
 name: eumtalk
 description: "이음톡 — 내 주변 사람과 관심사로 이어지는 동네 대화"
 publish_to: "none"
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: ^3.13.0
@@ -16,6 +16,9 @@ dependencies:
   web_socket_channel: ^3.0.0
   shared_preferences: ^2.3.0
   geolocator: ^14.0.0
+  image_picker: ^1.1.0
+  in_app_purchase: ^3.2.0
+  share_plus: ">=11.0.0 <14.0.0"
 
 dev_dependencies:
   flutter_test:
