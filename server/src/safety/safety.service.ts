@@ -5,6 +5,7 @@ import { RateLimiter } from '../realtime/redis';
 import { Realtime } from '../realtime/realtime';
 
 export const REPORT_REASONS = [
+  { id: 'child', label: '아동 안전(미성년자·아동 착취)' },
   { id: 'sexual', label: '성적 접근·거래 유도' },
   { id: 'scam', label: '사기' },
   { id: 'abuse', label: '욕설·괴롭힘' },

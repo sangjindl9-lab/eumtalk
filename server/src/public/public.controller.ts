@@ -89,6 +89,33 @@ th,td{border:1px solid rgba(28,30,29,.12);padding:8px 10px;text-align:left;verti
     );
   }
 
+  @Get(['child-safety', 'v1/child-safety'])
+  childSafety(@Res() res: any) {
+    const b = this.cfg.brand;
+    const op = b.operator || {};
+    const email = esc(op.email || '');
+    this.page(
+      res,
+      '아동 안전 기준 (Child Safety Standards)',
+      `<p class="meta">시행일: 2026년 11월 19일</p>
+<p>${esc(op.company || b.appName)}는 ${esc(b.appName)}에서 아동 성적 학대 및 착취(CSAE)와 아동 성 학대 콘텐츠(CSAM)를 어떤 형태로도 허용하지 않습니다.</p>
+<h2>1. 성인 전용 서비스</h2>
+<p>휴대폰 본인확인으로 성인(연 나이 19세 이상)임을 확인한 사람만 가입할 수 있습니다. 미성년자로 확인되거나 미성년자로 의심되는 계정은 즉시 이용을 정지합니다.</p>
+<h2>2. 금지 행위</h2>
+<ul><li>아동을 성적으로 묘사하거나 착취하는 모든 이미지·영상·글(CSAM)의 게시·전송·요청</li><li>아동에 대한 그루밍, 성적 접근, 만남 유도, 성 착취 목적의 연락</li><li>아동 대상 인신매매·성매매와 관련된 모든 활동</li></ul>
+<h2>3. 신고 방법</h2>
+<p>앱 안의 모든 프로필·대화 메시지·모임방·게시글에서 '신고'를 눌러 바로 신고할 수 있습니다. 앱 밖에서는 <a href="mailto:${email}">${email}</a>로 신고할 수 있습니다.</p>
+<h2>4. 처리 절차</h2>
+<ul><li>아동 안전 관련 신고는 우선 처리합니다.</li><li>CSAM 또는 아동 착취가 확인되면 해당 콘텐츠를 즉시 삭제하고 계정을 영구 정지합니다.</li><li>관련 법령에 따라 경찰청 등 수사기관과 방송통신심의위원회에 신고하며, 수사에 필요한 자료를 법적 절차에 따라 보존·제공합니다.</li><li>공개 사진은 자동 유해성 검사를 거치며, 운영자가 신고된 콘텐츠를 검토합니다.</li></ul>
+<h2>5. 법령 준수</h2>
+<p>운영자는 「아동·청소년의 성보호에 관한 법률」 등 대한민국 관련 법령과 Google Play 아동 안전 정책을 준수합니다.</p>
+<h2>6. 아동 안전 담당 연락처</h2>
+<p>${esc(op.company || '')} 아동 안전 담당 · 이메일: <a href="mailto:${email}">${email}</a></p>
+<h2>English summary</h2>
+<p>${esc(b.appNameEn)} has zero tolerance for child sexual abuse and exploitation (CSAE) and child sexual abuse material (CSAM). The service is for verified adults only. Users can report any profile, message, group room or post in the app, or email ${email}. Confirmed CSAM is removed immediately, the account is permanently banned, and the case is reported to the Korean National Police Agency and other relevant authorities as required by law. Child safety contact: ${email}.</p>`,
+    );
+  }
+
   @Get(['account-deletion', 'v1/account-deletion'])
   deletion(@Res() res: any) {
     const b = this.cfg.brand;

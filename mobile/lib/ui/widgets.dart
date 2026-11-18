@@ -232,6 +232,7 @@ Future<bool> confirm(BuildContext context, {required String title, required Stri
 }
 
 const reportReasons = <String, String>{
+  'child': '아동 안전(미성년자·아동 착취)',
   'sexual': '성적 접근·거래 유도',
   'scam': '사기',
   'abuse': '욕설·괴롭힘',
