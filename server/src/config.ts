@@ -44,6 +44,9 @@ export interface AppConfig {
     appleBundleId: string | null;
     appleSandbox: boolean;
   };
+  portone: { storeId: string; channelKey: string; apiSecret: string; apiBase: string };
+  vision: { apiKey: string | null; apiBase: string };
+  fcm: { tokenUrl: string; apiBase: string };
   adminEmail: string | null;
   adminPassword: string | null;
   blockedWords: string[];
@@ -101,16 +104,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       message: '본인확인(휴대폰·성인 인증) 사업자 설정이 없어 신규 가입이 중단된 상태입니다.',
       blocking: true,
     });
+  } else if (identityProvider === 'portone') {
+    const missing = ['PORTONE_STORE_ID', 'PORTONE_IDV_CHANNEL_KEY', 'PORTONE_API_SECRET'].filter((k) => !env[k]);
+    if (missing.length) {
+      problems.push({ key: 'IDENTITY_PROVIDER', message: `포트원 본인인증 설정(${missing.join(', ')})이 없어 신규 가입이 중단된 상태입니다.`, blocking: true });
+    } else {
+      identityMode = 'live';
+    }
   } else {
-    // 실제 사업자 어댑터는 계약 후 src/auth/identity.ts 에 추가한다.
     problems.push({
       key: 'IDENTITY_PROVIDER',
-      message: `본인확인 사업자 "${identityProvider}" 어댑터가 아직 구현되지 않아 신규 가입이 중단된 상태입니다.`,
+      message: `본인확인 사업자 "${identityProvider}"는 지원하지 않습니다(사용 가능: portone). 신규 가입이 중단된 상태입니다.`,
       blocking: true,
     });
   }
 
-  // DATA_KEY는 64자리 16진수를 그대로 쓰고, 그 밖의 32자 이상 문자열(Render 자동 생성값 등)은 SHA-256으로 키를 만든다.
   let dataKeyHex = env.DATA_KEY || '';
   let phonePepper = env.PHONE_PEPPER || '';
   if (dataKeyHex.length >= 32 && !/^[0-9a-fA-F]{64}$/.test(dataKeyHex)) {
@@ -153,11 +161,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (iapMode === 'dev' && appEnv === 'production') {
     problems.push({ key: 'IAP_MODE', message: '스토어 결제 검증 설정이 없어 운영 환경에서 구매 처리가 중단된 상태입니다.', blocking: true });
   }
-  problems.push({
-    key: 'IMAGE_FILTER',
-    message: '사진 유해 콘텐츠 자동 판별 사업자가 연결되지 않았습니다. 현재는 형식·크기 검사와 신고 후 숨김으로만 대응합니다.',
-    blocking: false,
-  });
+  if (!env.GOOGLE_VISION_API_KEY) {
+    problems.push({
+      key: 'IMAGE_FILTER',
+      message: '사진 유해 콘텐츠 자동 판별(GOOGLE_VISION_API_KEY)이 설정되지 않았습니다. 현재는 형식·크기 검사와 신고 후 숨김으로만 대응합니다.',
+      blocking: appEnv === 'production',
+    });
+  }
 
   return {
     publicUrl: (env.PUBLIC_URL || env.RENDER_EXTERNAL_URL || `http://localhost:${env.PORT || 3000}`).replace(/\/$/, ''),
@@ -184,6 +194,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       appleBundleId: env.APPLE_BUNDLE_ID || null,
       appleSandbox: env.APPLE_SANDBOX !== 'false',
     },
+    portone: {
+      storeId: env.PORTONE_STORE_ID || '',
+      channelKey: env.PORTONE_IDV_CHANNEL_KEY || '',
+      apiSecret: env.PORTONE_API_SECRET || '',
+      apiBase: (env.PORTONE_API_BASE || 'https://api.portone.io').replace(/\/$/, ''),
+    },
+    vision: { apiKey: env.GOOGLE_VISION_API_KEY || null, apiBase: (env.GOOGLE_VISION_API_BASE || 'https://vision.googleapis.com').replace(/\/$/, '') },
+    fcm: { tokenUrl: env.GOOGLE_TOKEN_URL || 'https://oauth2.googleapis.com/token', apiBase: (env.FCM_API_BASE || 'https://fcm.googleapis.com').replace(/\/$/, '') },
     adminEmail: env.ADMIN_EMAIL || null,
     adminPassword: env.ADMIN_PASSWORD || null,
     blockedWords: (env.BLOCKED_WORDS || '').split(',').map((w) => w.trim()).filter(Boolean),

@@ -21,14 +21,17 @@ export async function resetDb() {
   await pool.end();
 }
 
-export async function startServer(env: Record<string, string> = {}, opts: { autoMigrate?: boolean; port?: number } = {}) {
-  const port = opts.port ?? 4100 + Math.floor(Math.random() * 500);
+/** 비어 있는 포트를 운영체제가 고르게 한다(포트 충돌로 시험이 흔들리지 않도록). opts.port 는 하위 호환용으로 무시한다. */
+export async function startServer(env: Record<string, string> = {}, opts: { autoMigrate?: boolean; port?: number; primary?: boolean } = {}) {
   const cfg = loadConfig({
-    APP_ENV: 'development', PORT: String(port), DATABASE_URL: DB_URL, REDIS_URL, ADMIN_TOKEN: 'test-admin',
-    ADMIN_EMAIL: ADMIN.email, ADMIN_PASSWORD: ADMIN.password, MEDIA_DIR: `/tmp/eumtalk-test-media-${port}`, PUBLIC_URL: `http://127.0.0.1:${port}`, ...env,
+    APP_ENV: 'development', PORT: '0', DATABASE_URL: DB_URL, REDIS_URL, ADMIN_TOKEN: 'test-admin',
+    ADMIN_EMAIL: ADMIN.email, ADMIN_PASSWORD: ADMIN.password, MEDIA_DIR: `/tmp/eumtalk-test-media-${process.pid}`, ...env,
   } as any);
   const app = await createServer(cfg, { logger: false, autoMigrate: opts.autoMigrate });
-  if (!opts.port) {
+  const port = (app.getHttpServer().address() as any).port as number;
+  cfg.port = port;
+  cfg.publicUrl = `http://127.0.0.1:${port}`;
+  if (opts.primary ?? !opts.port) {
     PORT = port;
     BASE = `http://127.0.0.1:${port}`;
   }

@@ -61,9 +61,9 @@ export class PushService {
   private async sendFcm(userId: string, title: string, body: string, data: Record<string, string>) {
     const tokens = await this.db.query<{ token: string }>('SELECT token FROM device_tokens WHERE user_id = $1', [userId]);
     if (tokens.length === 0) return;
-    const { token: access, projectId } = await googleAccessToken(this.cfg.push.fcmServiceAccount!, 'https://www.googleapis.com/auth/firebase.messaging');
+    const { token: access, projectId } = await googleAccessToken(this.cfg.push.fcmServiceAccount!, 'https://www.googleapis.com/auth/firebase.messaging', this.cfg.fcm.tokenUrl);
     for (const t of tokens) {
-      const res = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+      const res = await fetch(`${this.cfg.fcm.apiBase}/v1/projects/${projectId}/messages:send`, {
         method: 'POST',
         headers: { authorization: `Bearer ${access}`, 'content-type': 'application/json' },
         body: JSON.stringify({ message: { token: t.token, notification: { title, body }, data, android: { priority: 'high' }, apns: { payload: { aps: { sound: 'default' } } } } }),

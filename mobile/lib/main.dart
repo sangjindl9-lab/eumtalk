@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/app_state.dart';
 import 'core/brand.dart';
+import 'ui/chat_page.dart';
 import 'ui/home.dart';
 import 'ui/onboarding.dart';
 import 'ui/widgets.dart';
@@ -32,6 +33,32 @@ class _EumTalkAppState extends State<EumTalkApp> {
   void initState() {
     super.initState();
     widget.app.addListener(_onChange);
+    // 알림을 누르면 해당 대화방(또는 대화 탭)을 연다.
+    widget.app.push.onOpen = _openFromPush;
+    widget.app.push.init();
+  }
+
+  Future<void> _openFromPush(Map<String, dynamic> data) async {
+    final app = widget.app;
+    final nav = _navigatorKey.currentState;
+    if (nav == null || !app.signedIn) return;
+    final conversationId = data['conversationId'] as String?;
+    if (conversationId != null) {
+      await app.refreshInbox();
+      final conv = app.conversationById(conversationId);
+      nav.popUntil((r) => r.isFirst);
+      nav.push(
+        MaterialPageRoute<void>(
+          builder: (_) => ChatPage(conversationId: conversationId, title: conv?.title ?? '대화'),
+        ),
+      );
+    } else if (data['kind'] == 'greeting') {
+      HomeShell.selectTab(3);
+      nav.popUntil((r) => r.isFirst);
+    } else if (data['kind'] == 'notice') {
+      HomeShell.selectTab(4);
+      nav.popUntil((r) => r.isFirst);
+    }
   }
 
   @override

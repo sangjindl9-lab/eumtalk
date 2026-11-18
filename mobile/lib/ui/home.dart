@@ -12,12 +12,34 @@ import 'widgets.dart';
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
+  /// 알림을 눌렀을 때 탭을 바꾸기 위한 통로
+  static final ValueNotifier<int?> _requestedTab = ValueNotifier<int?>(null);
+  static void selectTab(int index) => _requestedTab.value = index;
+
   @override
   State<HomeShell> createState() => _HomeShellState();
 }
 
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    HomeShell._requestedTab.addListener(_onTabRequest);
+  }
+
+  @override
+  void dispose() {
+    HomeShell._requestedTab.removeListener(_onTabRequest);
+    super.dispose();
+  }
+
+  void _onTabRequest() {
+    final i = HomeShell._requestedTab.value;
+    if (i != null && mounted) setState(() => _index = i);
+    HomeShell._requestedTab.value = null;
+  }
 
   void _go(int i) => setState(() => _index = i);
 

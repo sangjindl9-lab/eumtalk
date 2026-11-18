@@ -1,6 +1,8 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
+import 'package:webview_flutter/webview_flutter.dart';
+
 import '../core/api.dart';
 import '../core/app_state.dart';
 import '../core/brand.dart';
@@ -17,6 +19,7 @@ class IntroPage extends StatefulWidget {
 
 class _IntroPageState extends State<IntroPage> {
   bool? _signupAvailable;
+  String _flow = 'code';
   String? _error;
 
   @override
@@ -31,7 +34,10 @@ class _IntroPageState extends State<IntroPage> {
     try {
       final cfg = await app.api.get('/v1/app-config');
       if (mounted) {
-        setState(() => _signupAvailable = cfg['signupAvailable'] == true);
+        setState(() {
+          _signupAvailable = cfg['signupAvailable'] == true;
+          _flow = (cfg['identityFlow'] ?? 'code') as String;
+        });
       }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
@@ -128,12 +134,18 @@ class _IntroPageState extends State<IntroPage> {
                 ),
               const SizedBox(height: 16),
               FilledButton(
-                onPressed: _signupAvailable == true ? () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const PhonePage())) : null,
+                onPressed: _signupAvailable == true
+                    ? () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => _flow == 'web' ? const IdentityWebPage() : const PhonePage()))
+                    : null,
                 style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54)),
                 child: const Text('휴대폰 번호로 시작하기'),
               ),
               const SizedBox(height: 12),
-              Text('가입은 휴대폰 인증 → 성인 확인 → 프로필 순서로 진행됩니다.', style: t.textTheme.bodySmall, textAlign: TextAlign.center),
+              Text(
+                _flow == 'web' ? '휴대폰 본인인증으로 번호와 성인 여부를 확인한 뒤 프로필을 만듭니다.' : '가입은 휴대폰 인증 → 성인 확인 → 프로필 순서로 진행됩니다.',
+                style: t.textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
             ],
           ),
         ),
@@ -411,6 +423,142 @@ class _SignupProfilePageState extends State<SignupProfilePage> {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// 본인확인 사업자(포트원) 화면. 인증창에서 휴대폰 소유와 생년월일을 확인하면,
+/// 서버가 결과를 직접 다시 조회해 휴대폰 확인 → 성인 확인을 차례로 기록한다.
+class IdentityWebPage extends StatefulWidget {
+  const IdentityWebPage({super.key});
+
+  @override
+  State<IdentityWebPage> createState() => _IdentityWebPageState();
+}
+
+class _IdentityWebPageState extends State<IdentityWebPage> {
+  WebViewController? _web;
+  String? _verificationId;
+  String? _doneUrl;
+  String? _error;
+  bool _checking = false;
+  int _progress = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _start());
+  }
+
+  Future<void> _start() async {
+    final app = AppScope.read(context);
+    setState(() {
+      _error = null;
+      _web = null;
+      _checking = false;
+    });
+    try {
+      final res = await app.api.post('/v1/auth/identity/start');
+      _verificationId = res['verificationId'] as String;
+      _doneUrl = res['doneUrlPrefix'] as String;
+      final controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onProgress: (p) {
+              if (mounted) setState(() => _progress = p);
+            },
+            onNavigationRequest: (req) {
+              if (_doneUrl != null && req.url.startsWith(_doneUrl!)) {
+                _finish(Uri.parse(req.url));
+                return NavigationDecision.prevent;
+              }
+              // 통신사 인증 앱(PASS 등)을 여는 앱 전용 주소는 웹뷰에서 열지 않는다.
+              final scheme = Uri.tryParse(req.url)?.scheme ?? '';
+              if (!['http', 'https', 'about', 'data', 'javascript'].contains(scheme)) return NavigationDecision.prevent;
+              return NavigationDecision.navigate;
+            },
+            onPageStarted: (url) {
+              if (_doneUrl != null && url.startsWith(_doneUrl!)) _finish(Uri.parse(url));
+            },
+          ),
+        )
+        ..loadRequest(Uri.parse(res['pageUrl'] as String));
+      if (mounted) setState(() => _web = controller);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } on NetworkException catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    }
+  }
+
+  Future<void> _finish(Uri done) async {
+    if (_checking) return;
+    final code = done.queryParameters['code'];
+    if (code != null && code.isNotEmpty) {
+      // 사용자가 인증창을 닫았거나 인증에 실패한 경우
+      final message = done.queryParameters['message'];
+      setState(() => _error = message != null && message.isNotEmpty ? message : '본인인증을 완료하지 못했어요.');
+      return;
+    }
+    final app = AppScope.read(context);
+    setState(() => _checking = true);
+    try {
+      final res = await app.api.post('/v1/auth/identity/complete', {'verificationId': _verificationId});
+      if (res['status'] == 'login') {
+        await app.completeLogin(res['token'] as String);
+        return;
+      }
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => SignupProfilePage(signupToken: res['signupToken'] as String, ageBand: (res['ageBand'] ?? '') as String),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _checking = false;
+          _error = e.message;
+        });
+      }
+    } on NetworkException catch (e) {
+      if (mounted) {
+        setState(() {
+          _checking = false;
+          _error = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final web = _web;
+    Widget body;
+    if (_error != null) {
+      body = StateView(
+        icon: Icons.verified_user_outlined,
+        title: '본인인증을 마치지 못했어요',
+        message: _error,
+        actions: [
+          FilledButton(onPressed: _start, child: const Text('다시 인증하기')),
+          OutlinedButton(onPressed: () => Navigator.of(context).pop(), child: const Text('처음으로')),
+        ],
+      );
+    } else if (_checking || web == null) {
+      body = const StateView.loading();
+    } else {
+      body = Column(
+        children: [
+          if (_progress < 100) LinearProgressIndicator(value: _progress / 100),
+          Expanded(child: WebViewWidget(controller: web)),
+        ],
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(title: const Text('휴대폰 본인인증')),
+      body: SafeArea(child: body),
     );
   }
 }

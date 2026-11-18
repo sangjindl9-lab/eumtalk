@@ -51,7 +51,7 @@ if not (MOBILE / "android").exists() or not (MOBILE / "ios").exists():
 manifest = MOBILE / "android/app/src/main/AndroidManifest.xml"
 if manifest.exists():
     xml = manifest.read_text(encoding="utf-8")
-    for perm in ("android.permission.INTERNET", "android.permission.ACCESS_COARSE_LOCATION"):
+    for perm in ("android.permission.INTERNET", "android.permission.ACCESS_COARSE_LOCATION", "android.permission.POST_NOTIFICATIONS"):
         if perm not in xml:
             xml = xml.replace("<application", f'<uses-permission android:name="{perm}"/>\n    <application', 1)
     xml = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', xml, count=1)
@@ -84,6 +84,42 @@ for name in ("android/build.gradle.kts", "android/build.gradle"):
             step(f"{name}: release lintVital 작업 비활성화")
         break
 
+# ── Android 서명·최소 버전 ─────────────────────────────────────────────
+# android/key.properties 가 있으면 release 빌드(APK·AAB)를 그 업로드 키로 서명하고, 없으면 디버그 키로 서명한다.
+#   storeFile=/절대/경로/upload.jks
+#   storePassword=...
+#   keyAlias=upload
+#   keyPassword=...
+app_gradle = MOBILE / "android/app/build.gradle.kts"
+if app_gradle.exists():
+    g = app_gradle.read_text(encoding="utf-8")
+    if "eumReleaseProps" not in g:
+        g = g.replace("android {", """// eumtalk: 업로드 키 서명 설정 (tool/bootstrap.py 가 추가)
+val eumReleaseProps = java.util.Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+android {""", 1)
+        g = g.replace("    buildTypes {", """    signingConfigs {
+        create("eumRelease") {
+            if (!eumReleaseProps.isEmpty) {
+                storeFile = file(eumReleaseProps.getProperty("storeFile"))
+                storePassword = eumReleaseProps.getProperty("storePassword")
+                keyAlias = eumReleaseProps.getProperty("keyAlias")
+                keyPassword = eumReleaseProps.getProperty("keyPassword")
+            }
+        }
+    }
+
+    buildTypes {""", 1)
+        g = g.replace('signingConfig = signingConfigs.getByName("debug")',
+                      'signingConfig = if (eumReleaseProps.isEmpty) signingConfigs.getByName("debug") else signingConfigs.getByName("eumRelease")', 1)
+        # Firebase(FCM) 안드로이드 SDK는 minSdk 24 이상이 필요하다.
+        g = g.replace("minSdk = flutter.minSdkVersion", "minSdk = maxOf(flutter.minSdkVersion, 24)", 1)
+        app_gradle.write_text(g, encoding="utf-8")
+        step("app/build.gradle.kts: 업로드 키 서명(key.properties)·minSdk 24 반영")
+
 # ── iOS ──────────────────────────────────────────────────────────────────
 plist_path = MOBILE / "ios/Runner/Info.plist"
 if plist_path.exists():
@@ -93,9 +129,31 @@ if plist_path.exists():
     plist["NSLocationWhenInUseUsageDescription"] = LOCATION_REASON
     plist["NSPhotoLibraryUsageDescription"] = "프로필·대화·게시글에 올릴 사진을 고를 때 사용합니다."
     plist["NSCameraUsageDescription"] = "프로필·대화·게시글에 올릴 사진을 찍을 때 사용합니다."
+    modes = plist.get("UIBackgroundModes", [])
+    if "remote-notification" not in modes:
+        plist["UIBackgroundModes"] = modes + ["remote-notification"]
     with plist_path.open("wb") as f:
         plistlib.dump(plist, f)
-    step("Info.plist: 표시 이름·위치 사용 문구 반영")
+    step("Info.plist: 표시 이름·위치·사진·알림 설정 반영")
+
+# 푸시 알림(APNs) 권한 파일과 iOS 최소 버전(Firebase iOS SDK 기준 15.0)
+ent = MOBILE / "ios/Runner/Runner.entitlements"
+pbx = MOBILE / "ios/Runner.xcodeproj/project.pbxproj"
+if pbx.exists():
+    if not ent.exists():
+        with ent.open("wb") as f:
+            plistlib.dump({"aps-environment": "development"}, f)
+    text = pbx.read_text(encoding="utf-8")
+    if "CODE_SIGN_ENTITLEMENTS" not in text:
+        text = text.replace("INFOPLIST_FILE = Runner/Info.plist;", "CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;\n\t\t\t\tINFOPLIST_FILE = Runner/Info.plist;")
+    text = re.sub(r"IPHONEOS_DEPLOYMENT_TARGET = 1[0-4]\.0;", "IPHONEOS_DEPLOYMENT_TARGET = 15.0;", text)
+    pbx.write_text(text, encoding="utf-8")
+    podfile = MOBILE / "ios/Podfile"
+    if podfile.exists():
+        pf = podfile.read_text(encoding="utf-8")
+        pf = re.sub(r"^#?\s*platform :ios, '[0-9.]+'", "platform :ios, '15.0'", pf, count=1, flags=re.M)
+        podfile.write_text(pf, encoding="utf-8")
+    step("iOS: 푸시 권한(entitlements)·최소 버전 15.0 반영 — 배포용은 aps-environment 를 production 으로 바꾼다")
 
 # ── 아이콘 ────────────────────────────────────────────────────────────────
 icon = ROOT / "brand" / "icon.png"

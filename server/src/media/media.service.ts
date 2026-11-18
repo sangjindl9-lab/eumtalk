@@ -60,18 +60,21 @@ export class MediaService {
     } catch {
       throw bad('INVALID_IMAGE', 'JPG·PNG·WEBP·HEIC 사진만 올릴 수 있습니다.');
     }
+    // 공개 사진(프로필·게시글·방 대표 이미지)만 게시 전에 판별한다. 1대1·그룹 대화 사진은 신고로 대응한다.
+    let moderation: Record<string, string> | null = null;
     if (purpose !== 'chat') {
       const verdict = await this.filter.checkImage(out);
       if (!verdict.ok) throw bad('CONTENT_BLOCKED', verdict.reason || '게시할 수 없는 사진입니다.');
+      moderation = verdict.result ?? null;
     }
 
     const id = randomUUID();
     const key = `${purpose}/${id}.jpg`;
     await this.storage.put(key, out, 'image/jpeg');
     await this.db.query(
-      `INSERT INTO media (id, owner_id, purpose, conversation_id, storage_key, mime, bytes, width, height)
-       VALUES ($1, $2, $3, $4, $5, 'image/jpeg', $6, $7, $8)`,
-      [id, userId, purpose, purpose === 'chat' ? conversationId : null, key, out.length, width, height],
+      `INSERT INTO media (id, owner_id, purpose, conversation_id, storage_key, mime, bytes, width, height, moderation)
+       VALUES ($1, $2, $3, $4, $5, 'image/jpeg', $6, $7, $8, $9)`,
+      [id, userId, purpose, purpose === 'chat' ? conversationId : null, key, out.length, width, height, moderation ? JSON.stringify(moderation) : null],
     );
     return { id, width, height, bytes: out.length };
   }

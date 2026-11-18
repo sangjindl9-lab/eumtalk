@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 import 'models.dart';
+import 'push.dart';
 import 'realtime.dart';
 
 /// 로그인 상태, 대화 목록, 인사 요청, 전송 대기열을 한곳에서 관리한다.
@@ -25,6 +26,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   final SharedPreferences prefs;
   late final ApiClient api;
+  final PushService push = PushService();
 
   bool booting = true;
   Me? me;
@@ -125,9 +127,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _rt?.dispose();
     _rt = Realtime(uri: () => api.wsUri, token: api.token!, onEvent: _onEvent, onState: _onRealtimeState)..start();
     refreshInbox();
+    push.register(api);
   }
 
   Future<void> logout({bool remote = true}) async {
+    await push.unregister(api);
     if (remote) {
       try {
         await api.post('/v1/auth/logout');

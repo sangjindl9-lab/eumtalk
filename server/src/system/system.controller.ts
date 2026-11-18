@@ -29,6 +29,8 @@ export class SystemController {
       environment: this.cfg.appEnv,
       signupAvailable: this.cfg.identityMode !== 'unconfigured',
       identityMode: this.cfg.identityMode,
+      identityFlow: this.cfg.identityMode === 'dev' ? 'code' : this.cfg.identityMode === 'live' ? 'web' : 'none',
+      pushEnabled: this.cfg.push.provider === 'fcm',
       adultOnly: true,
     };
   }

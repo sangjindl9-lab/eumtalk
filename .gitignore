@@ -9,3 +9,4 @@ dist/
 *.jks
 key.properties
 .media/
+__pycache__/
