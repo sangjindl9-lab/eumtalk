@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      ios:
+        description: "iOS 빌드(서명 없이 컴파일 확인)도 실행"
+        type: boolean
+        default: false
+
+jobs:
+  server:
+    name: 서버 빌드·통합 시험
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: eumtalk_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+    defaults:
+      run:
+        working-directory: server
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/eumtalk_test
+      TEST_REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+
+  admin:
+    name: 관리자 웹 빌드
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  android:
+    name: Android 테스트 APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: pip install pillow
+      - run: python3 tool/bootstrap.py
+      - run: flutter pub get
+      - run: flutter analyze
+      # 저장소 Settings → Variables 에 API_BASE_URL(예: https://eumtalk-api.onrender.com)을 넣으면 그 서버로 붙는 APK가 만들어진다.
+      # 비워 두어도 앱 첫 화면에서 앱 이름을 길게 눌러 서버 주소를 바꿀 수 있다.
+      - run: flutter build apk --release --dart-define=API_BASE_URL=${{ vars.API_BASE_URL || 'http://10.0.2.2:3000' }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eumtalk-test-apk
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+
+  ios:
+    name: iOS 컴파일 확인(서명 없음)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.ios }}
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: pip3 install pillow --break-system-packages || true
+      - run: python3 tool/bootstrap.py
+      - run: flutter pub get
+      - run: flutter build ios --release --no-codesign

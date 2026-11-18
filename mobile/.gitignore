@@ -1,0 +1,12 @@
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.iml
+.idea/
+pubspec.lock
+# android/, ios/ 는 tool/bootstrap.py 가 현재 Flutter 버전에 맞게 생성한다.
+# 서명 설정을 넣기 시작하면 이 두 줄을 지우고 저장소에 포함한다.
+/android/
+/ios/

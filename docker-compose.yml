@@ -1,0 +1,31 @@
+# 로컬 개발용: PostgreSQL + Redis (+ 서버)
+#   docker compose up -d db redis        # DB·Redis만 띄우고 서버는 npm run start:dev
+#   docker compose up --build            # 서버까지 한 번에
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: eumtalk
+      POSTGRES_PASSWORD: eumtalk
+      POSTGRES_DB: eumtalk
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+  server:
+    image: node:22
+    working_dir: /app/server
+    command: sh -c "npm ci && npm run build && node dist/main.js"
+    environment:
+      APP_ENV: development
+      PORT: "3000"
+      DATABASE_URL: postgres://eumtalk:eumtalk@db:5432/eumtalk
+      REDIS_URL: redis://redis:6379
+      IDENTITY_PROVIDER: dev
+      ADMIN_TOKEN: local-admin
+    ports: ["3000:3000"]
+    volumes: [".:/app"]
+    depends_on: [db, redis]
+volumes:
+  pgdata:

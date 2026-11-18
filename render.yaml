@@ -1,0 +1,55 @@
+# Render Blueprint — GitHub 저장소를 연결하면 아래 구성이 한 번에 만들어진다.
+# 처음에는 시험(staging) 환경으로 뜬다. 정식 운영 전환은 docs/설치-운영.md 의 "운영 전환" 참고.
+databases:
+  - name: eumtalk-db
+    plan: free
+    postgresMajorVersion: "16"
+
+services:
+  - type: keyvalue
+    name: eumtalk-redis
+    plan: free
+    ipAllowList: []
+
+  - type: web
+    name: eumtalk-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: node dist/main.js
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: IDENTITY_PROVIDER
+        value: dev
+      - key: DATABASE_URL
+        fromDatabase:
+          name: eumtalk-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: eumtalk-redis
+          property: connectionString
+      - key: DATA_KEY
+        generateValue: true
+      - key: PHONE_PEPPER
+        generateValue: true
+      - key: ADMIN_TOKEN
+        generateValue: true
+
+  - type: web
+    name: eumtalk-admin
+    runtime: node
+    plan: free
+    rootDir: admin
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: API_BASE_URL
+        fromService:
+          type: web
+          name: eumtalk-api
+          envVarKey: RENDER_EXTERNAL_URL

@@ -1,0 +1,86 @@
+:root {
+  --bg: #f6f6f5;
+  --surface: #ffffff;
+  --line: rgba(28, 30, 29, 0.1);
+  --text: #1c1e1d;
+  --secondary: #5b605e;
+  --muted: #8a8f8d;
+  --accent: #2f6b5e;
+  --bad: #a63a2b;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 400 14px/1.5 "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+h1 { font-size: 20px; font-weight: 500; margin: 0; }
+h2 { font-size: 14px; font-weight: 500; margin: 0 0 12px; }
+p { margin: 4px 0 0; }
+ul { list-style: none; margin: 0; padding: 0; }
+.secondary { color: var(--secondary); }
+.muted { color: var(--muted); }
+.bad { color: var(--bad); }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+
+button {
+  font: inherit; height: 36px; padding: 0 16px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--text);
+  transition: background-color 120ms var(--ease), opacity 120ms var(--ease);
+}
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.6; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover:not(:disabled) { background: #28594f; }
+button.quiet { border-color: transparent; background: transparent; color: var(--secondary); text-align: left; padding: 0 12px; }
+button.quiet:hover { background: rgba(28, 30, 29, 0.05); }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+
+.login { min-height: 100%; display: grid; place-items: center; padding: 24px; }
+.login .panel { width: 100%; max-width: 380px; display: grid; gap: 8px; }
+.login label { margin-top: 12px; color: var(--secondary); font-size: 13px; }
+.login input { font: inherit; height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.login button { margin-top: 8px; height: 40px; }
+.login .mono { margin-top: 8px; word-break: break-all; }
+
+.shell { display: grid; grid-template-columns: 248px 1fr; min-height: 100%; }
+aside { border-right: 1px solid var(--line); padding: 20px 12px; display: flex; flex-direction: column; gap: 16px; }
+.brand { font-weight: 500; padding: 0 12px; }
+nav { display: grid; gap: 2px; flex: 1; align-content: start; }
+nav a, nav span { height: 32px; display: flex; align-items: center; padding: 0 12px; border-radius: 8px; font-size: 13px; }
+nav a.active { background: var(--surface); border: 1px solid var(--line); }
+nav span { color: var(--muted); }
+nav .group { margin: 24px 12px 8px; font-size: 12px; color: var(--secondary); }
+
+main { padding: 28px 32px; max-width: 1040px; width: 100%; display: grid; gap: 16px; align-content: start; }
+header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 4px; }
+
+.alert { border: 1px solid rgba(166, 58, 43, 0.35); background: #fbf1ef; color: #6e2318; border-radius: 12px; padding: 16px 20px; }
+.alert li, .notes li { display: grid; grid-template-columns: 168px 1fr; gap: 12px; padding: 6px 0; align-items: baseline; }
+.notes li { color: var(--secondary); }
+
+.checks li { display: grid; grid-template-columns: 8px 160px 1fr; gap: 12px; align-items: center; height: 40px; border-top: 1px solid var(--line); }
+.checks li:first-child { border-top: 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; }
+.dot.ok { background: var(--accent); }
+.dot.off { background: var(--bad); }
+
+.stats { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.stats div { padding: 16px 20px; display: grid; gap: 4px; border-left: 1px solid var(--line); }
+.stats div:first-child { border-left: 0; }
+.stats strong { font-size: 24px; font-weight: 500; }
+.stats span { font-size: 13px; }
+
+@media (max-width: 760px) {
+  .shell { grid-template-columns: 1fr; }
+  aside { border-right: 0; border-bottom: 1px solid var(--line); }
+  nav span, nav .group { display: none; }
+  main { padding: 20px 16px; }
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .stats div { border-left: 0; border-top: 1px solid var(--line); }
+  .alert li, .notes li { grid-template-columns: 1fr; gap: 0; }
+}
