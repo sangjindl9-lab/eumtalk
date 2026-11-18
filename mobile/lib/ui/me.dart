@@ -231,7 +231,7 @@ class MeTab extends StatelessWidget {
               leading: const Icon(Icons.logout),
               title: const Text('로그아웃'),
               onTap: () async {
-                if (await confirm(context, title: '로그아웃할까요?', message: '보내지 못한 메시지와 작성 중인 내용은 이 기기에서 지워집니다.', action: '로그아웃')) {
+                if (await confirm(context, title: '로그아웃할까요?', message: '보내지 못한 메시지와 작성 중인 내용은 이 기기에서 지워집니다. 익명으로 가입한 계정은 로그아웃하면 같은 계정으로 다시 들어올 수 없습니다.', action: '로그아웃')) {
                   await app.logout();
                 }
               },

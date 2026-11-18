@@ -27,7 +27,7 @@ services:
       - key: APP_ENV
         value: staging
       - key: IDENTITY_PROVIDER
-        value: dev
+        value: anonymous
       - key: SIGNUP_GRANT_POINTS
         value: "100000"
       - key: DATABASE_URL

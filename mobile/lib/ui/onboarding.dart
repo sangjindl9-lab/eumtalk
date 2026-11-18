@@ -117,7 +117,11 @@ class _IntroPageState extends State<IntroPage> {
               point(Icons.near_me_outlined, '내 주변 사람 찾기', '가까운 지역에서 관심사가 맞는 사람을 찾아요. 정확한 위치는 누구에게도 보이지 않습니다.'),
               point(Icons.waving_hand_outlined, '인사하고, 수락하면 대화', '짧은 인사를 보내고 상대가 수락했을 때만 1대1 대화가 열립니다.'),
               point(Icons.groups_outlined, '지역방과 관심사 모임', '동네 소식과 취미 모임을 한곳에서 나눠요.'),
-              point(Icons.verified_user_outlined, '성인 회원 전용', '휴대폰 인증과 성인 확인을 마친 회원만 이용합니다. 번호·실명·생년월일은 공개되지 않아요.'),
+              point(
+                Icons.verified_user_outlined,
+                '성인 회원 전용',
+                _flow == 'anonymous' ? '만 19세 이상만 이용할 수 있어요. 휴대폰 번호나 실명 없이 익명으로 시작합니다.' : '휴대폰 인증과 성인 확인을 마친 회원만 이용합니다. 번호·실명·생년월일은 공개되지 않아요.',
+              ),
               const SizedBox(height: 8),
               if (_error != null)
                 Card(
@@ -135,14 +139,16 @@ class _IntroPageState extends State<IntroPage> {
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: _signupAvailable == true
-                    ? () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => _flow == 'web' ? const IdentityWebPage() : const PhonePage()))
+                    ? () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => _flow == 'anonymous' ? const AnonymousStartPage() : (_flow == 'web' ? const IdentityWebPage() : const PhonePage())))
                     : null,
                 style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54)),
-                child: const Text('휴대폰 번호로 시작하기'),
+                child: Text(_flow == 'anonymous' ? '익명으로 시작하기' : '휴대폰 번호로 시작하기'),
               ),
               const SizedBox(height: 12),
               Text(
-                _flow == 'web' ? '휴대폰 본인인증으로 번호와 성인 여부를 확인한 뒤 프로필을 만듭니다.' : '가입은 휴대폰 인증 → 성인 확인 → 프로필 순서로 진행됩니다.',
+                _flow == 'anonymous'
+                    ? '출생 연도 확인 → 프로필 순서로 바로 시작합니다. 계정은 이 기기에 저장되니 로그아웃하거나 앱을 지우면 다시 들어올 수 없어요.'
+                    : (_flow == 'web' ? '휴대폰 본인인증으로 번호와 성인 여부를 확인한 뒤 프로필을 만듭니다.' : '가입은 휴대폰 인증 → 성인 확인 → 프로필 순서로 진행됩니다.'),
                 style: t.textTheme.bodySmall,
                 textAlign: TextAlign.center,
               ),
@@ -269,6 +275,72 @@ class _PhonePageState extends State<PhonePage> {
           FilledButton(onPressed: _busy ? null : _verify, child: const Text('확인')),
           TextButton(onPressed: _busy ? null : () => setState(() => _verificationId = null), child: const Text('번호 다시 입력')),
         ],
+      ],
+    );
+  }
+}
+
+/// 익명 가입: 휴대폰·본인인증 없이 출생 연도와 성인 확인(자기 신고)만 받는다.
+class AnonymousStartPage extends StatefulWidget {
+  const AnonymousStartPage({super.key});
+
+  @override
+  State<AnonymousStartPage> createState() => _AnonymousStartPageState();
+}
+
+class _AnonymousStartPageState extends State<AnonymousStartPage> {
+  final _year = TextEditingController();
+  bool _adult = false;
+  bool _busy = false;
+
+  Future<void> _start() async {
+    if (_busy) return;
+    final app = AppScope.read(context);
+    setState(() => _busy = true);
+    try {
+      final res = await app.api.post('/v1/auth/anonymous/start', {'birthYear': int.tryParse(_year.text), 'adultConfirmed': _adult});
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => SignupProfilePage(signupToken: res['signupToken'] as String, ageBand: (res['ageBand'] ?? '') as String),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (mounted) showMessage(context, e.message);
+    } on NetworkException catch (e) {
+      if (mounted) showMessage(context, e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _StepScaffold(
+      step: 1,
+      title: '성인 확인',
+      subtitle: '만 19세 이상만 이용할 수 있습니다. 출생 연도는 연령대 표시에만 쓰이고 공개되지 않습니다.',
+      children: [
+        TextField(
+          controller: _year,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)],
+          decoration: const InputDecoration(labelText: '출생 연도', hintText: '1990'),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 8),
+        CheckboxListTile(
+          value: _adult,
+          onChanged: (v) => setState(() => _adult = v ?? false),
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text('만 19세 이상이며, 나이를 거짓으로 입력하면 이용이 정지될 수 있음에 동의합니다.'),
+        ),
+        const SizedBox(height: 4),
+        Text('휴대폰 번호 없이 익명으로 가입합니다. 계정은 이 기기에만 저장되므로 로그아웃하거나 앱을 지우면 같은 계정으로 다시 들어올 수 없습니다.',
+            style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 16),
+        FilledButton(onPressed: _busy || !_adult || _year.text.length != 4 ? null : _start, child: const Text('다음')),
       ],
     );
   }

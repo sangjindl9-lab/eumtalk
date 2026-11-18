@@ -35,7 +35,8 @@ export class AuthService {
   }
 
   /** 앱이 어떤 가입 화면을 보여줄지: code(인증번호 입력, 개발용) / web(본인인증 사업자 화면) */
-  flow(): 'code' | 'web' | 'none' {
+  flow(): 'code' | 'web' | 'anonymous' | 'none' {
+    if (this.cfg.identityMode === 'anonymous') return 'anonymous';
     if (this.cfg.identityMode === 'dev') return 'code';
     if (this.cfg.identityMode === 'live') return 'web';
     return 'none';
@@ -108,6 +109,24 @@ export class AuthService {
     return { status: 'signup' as const, signupToken, adultVerified: true, ageBand: ageBand(adult.birthYear) };
   }
 
+  // ── 익명 가입: 휴대폰·본인인증 없이 출생 연도와 성인 확인(자기 신고)만 받는다 ─────
+  async startAnonymous(body: any, ip: string) {
+    assertIdentityConfigured(this.cfg);
+    if (this.cfg.identityMode !== 'anonymous') throw bad('USE_IDENTITY', '이 서버는 익명 가입을 받지 않습니다.');
+    if (!(await this.rl.hit(`auth:anon:${ip}`, this.cfg.appEnv === 'production' ? 20 : 2000, 3600))) throw tooMany('가입 요청이 많습니다. 잠시 뒤에 다시 시도해 주세요.');
+    const birthYear = Number(body?.birthYear);
+    if (!Number.isInteger(birthYear) || birthYear < 1900 || birthYear > new Date().getFullYear()) throw bad('INVALID_INPUT', '출생 연도를 확인해 주세요.');
+    if (body?.adultConfirmed !== true) throw bad('ADULT_CONFIRM_REQUIRED', '성인 확인에 동의해 주세요.');
+    if (!isAdult(birthYear)) throw forbidden('NOT_ADULT', '성인 회원만 이용할 수 있는 서비스입니다.');
+    const signupToken = randomToken();
+    await this.db.query(
+      `INSERT INTO signup_verifications (provider, phone_verified_at, adult_verified_at, birth_year, signup_token_hash, expires_at)
+       VALUES ('anonymous', now(), now(), $1, $2, now() + ($3 || ' minutes')::interval)`,
+      [birthYear, sha256(signupToken), String(SIGNUP_TTL_MIN)],
+    );
+    return { status: 'signup' as const, signupToken, adultVerified: true, ageBand: ageBand(birthYear) };
+  }
+
   // ── 본인확인 사업자(포트원) 흐름 ───────────────────────────────────────
 
   /** 1) 인증 시작: 앱이 열 웹 페이지 주소를 돌려준다. */
@@ -153,7 +172,7 @@ export class AuthService {
         ${lock ? 'FOR UPDATE' : ''}`,
       [sha256(signupToken)],
     );
-    if (!v) throw bad('SIGNUP_EXPIRED', '가입 시간이 지났습니다. 휴대폰 인증부터 다시 진행해 주세요.');
+    if (!v) throw bad('SIGNUP_EXPIRED', '가입 시간이 지났습니다. 처음부터 다시 진행해 주세요.');
     return v;
   }
 

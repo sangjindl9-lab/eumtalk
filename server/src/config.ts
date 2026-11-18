@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export type AppEnv = 'development' | 'staging' | 'production';
-export type IdentityMode = 'dev' | 'live' | 'unconfigured';
+export type IdentityMode = 'dev' | 'live' | 'anonymous' | 'unconfigured';
 
 export interface Brand {
   appName: string;
@@ -100,6 +100,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     } else {
       identityMode = 'dev';
     }
+  } else if (identityProvider === 'anonymous') {
+    // 본인인증 없이 익명으로 가입한다. 출생 연도와 '성인입니다' 확인은 회원 자기 신고다.
+    identityMode = 'anonymous';
   } else if (identityProvider === 'none' || identityProvider === '') {
     problems.push({
       key: 'IDENTITY_PROVIDER',
@@ -116,7 +119,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   } else {
     problems.push({
       key: 'IDENTITY_PROVIDER',
-      message: `본인확인 사업자 "${identityProvider}"는 지원하지 않습니다(사용 가능: portone). 신규 가입이 중단된 상태입니다.`,
+      message: `본인확인 사업자 "${identityProvider}"는 지원하지 않습니다(사용 가능: portone, anonymous). 신규 가입이 중단된 상태입니다.`,
       blocking: true,
     });
   }

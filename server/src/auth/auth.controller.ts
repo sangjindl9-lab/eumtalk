@@ -27,6 +27,13 @@ export class AuthController {
     return this.auth.verifyPhone(uuid(body?.verificationId, 'verificationId'), body?.code, platformOf(platform));
   }
 
+  /** 익명 가입(본인인증 없음) */
+  @Post('anonymous/start')
+  @HttpCode(200)
+  anonymousStart(@Body() body: any, @Ip() ip: string) {
+    return this.auth.startAnonymous(body, ip || 'unknown');
+  }
+
   /** 본인확인 사업자 화면 방식 */
   @Post('identity/start')
   @HttpCode(200)

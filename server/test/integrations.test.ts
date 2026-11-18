@@ -257,3 +257,31 @@ test('FCM 발송: 기기 토큰으로 보내고, 미리보기 끄면 내용 없�
   for (let i = 0; i < 100 && (await sql('SELECT 1 FROM device_tokens WHERE token = $1', [dead])).length; i++) await sleep(20);
   assert.equal((await sql('SELECT 1 FROM device_tokens WHERE token = $1', [dead])).length, 0);
 });
+
+test('익명 가입: 본인인증 없이 출생 연도·성인 확인(자기 신고)만으로 가입하고, 미성년·확인 누락은 막는다', async () => {
+  const a = await startServer({ APP_ENV: 'production', IDENTITY_PROVIDER: 'anonymous', DATA_KEY: '1'.repeat(64), PHONE_PEPPER: 'anon-pepper', ADMIN_TOKEN: 'x'.repeat(32) }, { autoMigrate: false, port: 1 });
+  try {
+    const cfg = await api('GET', '/v1/auth/status', null, undefined, a.base);
+    assert.equal(cfg.body.identityFlow, 'anonymous');
+    assert.equal(cfg.body.signupAvailable, true);
+    assert.equal((await api('POST', '/v1/auth/phone/start', null, { phone: '01011113333' }, a.base)).status, 400);
+    const minorYear = new Date().getFullYear() - 17;
+    assert.equal((await api('POST', '/v1/auth/anonymous/start', null, { birthYear: minorYear, adultConfirmed: true }, a.base)).body.error.code, 'NOT_ADULT');
+    assert.equal((await api('POST', '/v1/auth/anonymous/start', null, { birthYear: 1990 }, a.base)).body.error.code, 'ADULT_CONFIRM_REQUIRED');
+    const st = await api('POST', '/v1/auth/anonymous/start', null, { birthYear: 1990, adultConfirmed: true }, a.base);
+    assert.equal(st.status, 200, JSON.stringify(st.body));
+    assert.equal(st.body.status, 'signup');
+    const su = await api('POST', '/v1/auth/signup', null, { signupToken: st.body.signupToken, nickname: nick('익명'), regionId: WONJU, interestIds: [] }, a.base);
+    assert.equal(su.status, 201, JSON.stringify(su.body));
+    const me = await api('GET', '/v1/me', su.body.token, undefined, a.base);
+    assert.equal(me.status, 200);
+    const priv = await sql('SELECT p.identity_provider, p.phone_enc, u.phone_hash FROM user_private p JOIN users u ON u.id = p.user_id WHERE p.user_id = $1', [su.body.userId]);
+    assert.equal(priv[0].identity_provider, 'anonymous');
+    assert.equal(priv[0].phone_enc, null);
+    assert.equal(priv[0].phone_hash, null);
+    // 같은 가입 토큰은 다시 쓸 수 없다
+    assert.equal((await api('POST', '/v1/auth/signup', null, { signupToken: st.body.signupToken, nickname: nick('익명'), regionId: WONJU }, a.base)).status, 400);
+  } finally {
+    await a.app.close();
+  }
+});
