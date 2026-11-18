@@ -94,17 +94,17 @@ app_gradle = MOBILE / "android/app/build.gradle.kts"
 if app_gradle.exists():
     g = app_gradle.read_text(encoding="utf-8")
     if "eumReleaseProps" not in g:
+        # Kotlin DSL 에서 java 는 확장 이름과 겹치므로 import 로 가져온다(import 는 파일 맨 위에 있어야 한다).
+        g = "import java.util.Properties\n" + g
         g = g.replace("android {", """// eumtalk: 업로드 키 서명 설정 (tool/bootstrap.py 가 추가)
-val eumReleaseProps = java.util.Properties().apply {
-    val f = rootProject.file("key.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
-}
+val eumReleaseProps = Properties()
+rootProject.file("key.properties").let { f -> if (f.exists()) f.inputStream().use { s -> eumReleaseProps.load(s) } }
 
 android {""", 1)
         g = g.replace("    buildTypes {", """    signingConfigs {
         create("eumRelease") {
-            if (!eumReleaseProps.isEmpty) {
-                storeFile = file(eumReleaseProps.getProperty("storeFile"))
+            if (!eumReleaseProps.isEmpty()) {
+                storeFile = file(eumReleaseProps.getProperty("storeFile")!!)
                 storePassword = eumReleaseProps.getProperty("storePassword")
                 keyAlias = eumReleaseProps.getProperty("keyAlias")
                 keyPassword = eumReleaseProps.getProperty("keyPassword")
@@ -114,7 +114,7 @@ android {""", 1)
 
     buildTypes {""", 1)
         g = g.replace('signingConfig = signingConfigs.getByName("debug")',
-                      'signingConfig = if (eumReleaseProps.isEmpty) signingConfigs.getByName("debug") else signingConfigs.getByName("eumRelease")', 1)
+                      'signingConfig = if (eumReleaseProps.isEmpty()) signingConfigs.getByName("debug") else signingConfigs.getByName("eumRelease")', 1)
         # Firebase(FCM) 안드로이드 SDK는 minSdk 24 이상이 필요하다.
         g = g.replace("minSdk = flutter.minSdkVersion", "minSdk = maxOf(flutter.minSdkVersion, 24)", 1)
         app_gradle.write_text(g, encoding="utf-8")
