@@ -65,6 +65,8 @@ jobs:
   android:
     name: Android 테스트 APK·Play용 AAB
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: mobile
@@ -87,7 +89,7 @@ jobs:
       # Firebase 값(Settings → Variables)을 넣으면 푸시 수신이 켜진 APK가 만들어진다. 비워 두면 푸시 없이 동작한다.
       - name: 빌드 설정값
         run: |
-          echo "DEFINES=--dart-define=API_BASE_URL=${{ vars.API_BASE_URL || 'http://10.0.2.2:3000' }} --dart-define=FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }} --dart-define=FIREBASE_SENDER_ID=${{ vars.FIREBASE_SENDER_ID }} --dart-define=FIREBASE_API_KEY=${{ vars.FIREBASE_API_KEY }} --dart-define=FIREBASE_ANDROID_APP_ID=${{ vars.FIREBASE_ANDROID_APP_ID }} --dart-define=FIREBASE_IOS_APP_ID=${{ vars.FIREBASE_IOS_APP_ID }}" >> "$GITHUB_ENV"
+          echo "DEFINES=--dart-define=API_BASE_URL=${{ vars.API_BASE_URL || 'https://eumtalk-api.onrender.com' }} --dart-define=FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }} --dart-define=FIREBASE_SENDER_ID=${{ vars.FIREBASE_SENDER_ID }} --dart-define=FIREBASE_API_KEY=${{ vars.FIREBASE_API_KEY }} --dart-define=FIREBASE_ANDROID_APP_ID=${{ vars.FIREBASE_ANDROID_APP_ID }} --dart-define=FIREBASE_IOS_APP_ID=${{ vars.FIREBASE_IOS_APP_ID }}" >> "$GITHUB_ENV"
       - run: flutter build apk --release $DEFINES
       - uses: actions/upload-artifact@v4
         with:
@@ -122,6 +124,17 @@ jobs:
         with:
           name: ${{ env.AAB_NAME }}
           path: mobile/build/app/outputs/bundle/release/app-release.aab
+      # main 빌드는 저장소 릴리스(비공개)에도 올린다. 업로드 키 서명은 릴리스 담당자가 받아서 한다.
+      - name: 저장소 릴리스에 빌드 올리기
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          TAG="android-${VERSION}-run${{ github.run_number }}"
+          cp build/app/outputs/bundle/release/app-release.aab "eumtalk-${VERSION}.aab"
+          cp build/app/outputs/flutter-apk/app-release.apk "eumtalk-${VERSION}-test.apk"
+          gh release create "$TAG" "eumtalk-${VERSION}.aab" "eumtalk-${VERSION}-test.apk" --prerelease --title "Android ${VERSION} (실행 ${{ github.run_number }})" --notes "서버: ${{ vars.API_BASE_URL || 'https://eumtalk-api.onrender.com' }} / AAB 서명: ${{ env.AAB_NAME }}"
 
   ios:
     name: iOS 컴파일 확인(서명 없음)
