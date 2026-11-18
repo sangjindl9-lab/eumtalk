@@ -28,6 +28,8 @@ services:
         value: staging
       - key: IDENTITY_PROVIDER
         value: dev
+      - key: SIGNUP_GRANT_POINTS
+        value: "100000"
       - key: DATABASE_URL
         fromDatabase:
           name: eumtalk-db

@@ -218,6 +218,15 @@ export class AuthService {
           [user.id, interestIds],
         );
       }
+      if (this.cfg.signupGrantPoints > 0) {
+        const pts = this.cfg.signupGrantPoints;
+        await q.query('INSERT INTO point_wallets (user_id, balance) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET balance = point_wallets.balance + $2', [user.id, pts]);
+        await q.query(
+          `INSERT INTO point_ledger (user_id, delta, balance_after, type, reason, idem_key)
+           VALUES ($1, $2, $2, 'grant', '시험 서버 가입 포인트', $3)`,
+          [user.id, pts, `signup-grant:${user.id}`],
+        );
+      }
       await q.query('UPDATE signup_verifications SET consumed_at = now() WHERE id = $1', [v.id]);
       const token = await this.createSession(q, user.id, platform);
       return { token, userId: user.id };

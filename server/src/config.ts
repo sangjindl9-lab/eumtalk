@@ -34,6 +34,8 @@ export interface AppConfig {
     s3: { endpoint: string; region: string; bucket: string; accessKey: string; secretKey: string };
   };
   push: { provider: 'log' | 'fcm'; fcmServiceAccount: string | null };
+  /** 가입 즉시 지급하는 시험용 포인트(운영에서는 0으로 고정). 스토어 심사·내부 시험용 */
+  signupGrantPoints: number;
   iap: {
     mode: 'dev' | 'live';
     googlePackage: string | null;
@@ -184,6 +186,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       },
     },
     push: { provider: pushProvider, fcmServiceAccount: env.FCM_SERVICE_ACCOUNT || null },
+    signupGrantPoints: appEnv === 'production' ? 0 : Math.max(0, Math.min(1_000_000, Number(env.SIGNUP_GRANT_POINTS) || 0)),
     iap: {
       mode: iapMode,
       googlePackage: env.GOOGLE_PLAY_PACKAGE || null,
