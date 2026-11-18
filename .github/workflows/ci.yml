@@ -111,7 +111,8 @@ jobs:
             printf "storeFile=%s\nstorePassword=temppass\nkeyAlias=temp\nkeyPassword=temppass\n" "$RUNNER_TEMP/temp.jks" > android/key.properties
             echo "AAB_NAME=eumtalk-aab-temp-key-not-for-play" >> "$GITHUB_ENV"
           fi
-      - run: flutter build appbundle --release $DEFINES
+      # 스토어 제출용은 서버 주소 변경 기능을 끈다.
+      - run: flutter build appbundle --release $DEFINES --dart-define=ALLOW_SERVER_OVERRIDE=false
       - name: AAB 서명 확인
         run: |
           jarsigner -verify -certs build/app/outputs/bundle/release/app-release.aab > "$RUNNER_TEMP/verify.txt" 2>&1 || true

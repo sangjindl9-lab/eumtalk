@@ -9,10 +9,10 @@
   "iconSource": "brand/icon.svg",
   "operator": {
     "company": "이음소프트",
-    "representative": "(대표자명 입력)",
-    "businessNumber": "(사업자등록번호 입력)",
-    "address": "(사업장 주소 입력)",
-    "email": "support@example.com",
-    "phone": "(고객센터 전화 입력)"
+    "representative": "",
+    "businessNumber": "",
+    "address": "",
+    "email": "pm999@naver.com",
+    "phone": ""
   }
 }

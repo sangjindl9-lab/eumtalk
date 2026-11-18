@@ -20,6 +20,7 @@ import { PointsService } from './points/points.service';
 import { PurchasesService } from './points/purchases.service';
 import { PostsController } from './posts/posts.controller';
 import { PostsService } from './posts/posts.service';
+import { PublicController } from './public/public.controller';
 import { ProfileController } from './profile/profile.controller';
 import { PushService } from './push/push.service';
 import { RateLimiter, RedisConn } from './realtime/redis';
@@ -37,7 +38,7 @@ export class AppModule {
       module: AppModule,
       controllers: [
         SystemController, AuthController, ProfileController, GreetingsController, ChatController, SafetyController,
-        MediaController, RoomsController, PostsController, PointsController, AccountController, AdminController,
+        MediaController, RoomsController, PostsController, PointsController, AccountController, AdminController, PublicController,
       ],
       providers: [
         { provide: CONFIG, useValue: cfg },
