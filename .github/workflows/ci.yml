@@ -113,7 +113,10 @@ jobs:
           fi
       - run: flutter build appbundle --release $DEFINES
       - name: AAB 서명 확인
-        run: jarsigner -verify -verbose:summary build/app/outputs/bundle/release/app-release.aab | tail -2
+        run: |
+          jarsigner -verify -certs build/app/outputs/bundle/release/app-release.aab > "$RUNNER_TEMP/verify.txt" 2>&1 || true
+          grep -E "jar verified|unsigned" "$RUNNER_TEMP/verify.txt"
+          grep -q "jar verified" "$RUNNER_TEMP/verify.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ env.AAB_NAME }}
