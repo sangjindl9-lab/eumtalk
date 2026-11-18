@@ -67,6 +67,23 @@ if debug_manifest.exists():
         debug_manifest.write_text(xml, encoding="utf-8")
         step("debug 빌드 평문(http) 통신 허용")
 
+# 일부 플러그인(image_picker_android 등)에서 release 빌드의 lintVital 작업이 lint 도구 자체 오류로 죽는 경우가 있다.
+# 앱 동작과 무관한 검사이므로 꺼 둔다. (Groovy·Kotlin DSL 양쪽에서 같은 문법으로 동작)
+LINT_BLOCK = """
+// eumtalk: lintVital 비활성화 (tool/bootstrap.py 가 추가)
+allprojects {
+    tasks.matching { it.name.startsWith("lintVital") }.configureEach { enabled = false }
+}
+"""
+for name in ("android/build.gradle.kts", "android/build.gradle"):
+    gradle = MOBILE / name
+    if gradle.exists():
+        text = gradle.read_text(encoding="utf-8")
+        if "eumtalk: lintVital" not in text:
+            gradle.write_text(text.rstrip() + "\n" + LINT_BLOCK, encoding="utf-8")
+            step(f"{name}: release lintVital 작업 비활성화")
+        break
+
 # ── iOS ──────────────────────────────────────────────────────────────────
 plist_path = MOBILE / "ios/Runner/Info.plist"
 if plist_path.exists():
