@@ -264,6 +264,10 @@ test('익명 가입: 본인인증 없이 출생 연도·성인 확인(자기 신
     const cfg = await api('GET', '/v1/auth/status', null, undefined, a.base);
     assert.equal(cfg.body.identityFlow, 'anonymous');
     assert.equal(cfg.body.signupAvailable, true);
+    // 앱은 /v1/app-config 의 identityFlow 로 가입 화면을 고른다
+    const appCfg = await api('GET', '/v1/app-config', null, undefined, a.base);
+    assert.equal(appCfg.body.identityFlow, 'anonymous');
+    assert.equal(appCfg.body.signupAvailable, true);
     assert.equal((await api('POST', '/v1/auth/phone/start', null, { phone: '01011113333' }, a.base)).status, 400);
     const minorYear = new Date().getFullYear() - 17;
     assert.equal((await api('POST', '/v1/auth/anonymous/start', null, { birthYear: minorYear, adultConfirmed: true }, a.base)).body.error.code, 'NOT_ADULT');
