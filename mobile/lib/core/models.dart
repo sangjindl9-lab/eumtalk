@@ -78,6 +78,30 @@ class PublicProfile {
   }
 }
 
+/// 알림 설정. 서버가 종류별 켜기/끄기와 방해 금지 시간(한국 시각)을 지켜서 보낸다.
+class NotifyPrefs {
+  NotifyPrefs.fromJson(Map<String, dynamic> j)
+    : all = (j['all'] ?? true) as bool,
+      direct = (j['direct'] ?? true) as bool,
+      greeting = (j['greeting'] ?? true) as bool,
+      room = (j['room'] ?? true) as bool,
+      comment = (j['comment'] ?? true) as bool,
+      notice = (j['notice'] ?? true) as bool,
+      quiet = (j['quiet'] ?? false) as bool,
+      quietStart = (j['quietStart'] ?? '23:00') as String,
+      quietEnd = (j['quietEnd'] ?? '08:00') as String;
+
+  final bool all;
+  final bool direct;
+  final bool greeting;
+  final bool room;
+  final bool comment;
+  final bool notice;
+  final bool quiet;
+  final String quietStart;
+  final String quietEnd;
+}
+
 class Me {
   Me.fromJson(Map<String, dynamic> j)
     : userId = j['userId'] as String,
@@ -95,6 +119,7 @@ class Me {
       showLastActive = (j['settings']?['showLastActive'] ?? true) as bool,
       acceptGreetings = (j['settings']?['acceptGreetings'] ?? true) as bool,
       pushPreview = (j['settings']?['pushPreview'] ?? true) as bool,
+      notify = NotifyPrefs.fromJson((j['notify'] as Map?)?.cast<String, dynamic>() ?? const {}),
       browse = (j['browse'] as Map?)?.cast<String, dynamic>(),
       status = (j['status'] ?? 'active') as String,
       locationShared = (j['locationShared'] ?? false) as bool;
@@ -113,6 +138,7 @@ class Me {
   final bool showLastActive;
   final bool acceptGreetings;
   final bool pushPreview;
+  final NotifyPrefs notify;
   final String? photoMediaId;
 
   /// 다른 지역 둘러보기 이용 중이면 {regionId, regionName, until}

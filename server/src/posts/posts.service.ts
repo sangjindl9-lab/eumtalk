@@ -7,6 +7,7 @@ import { GreetingsService } from '../greetings/greetings.service';
 import { MediaService } from '../media/media.service';
 import { PointsService } from '../points/points.service';
 import { RateLimiter } from '../realtime/redis';
+import { PushService } from '../push/push.service';
 
 const BOARD = ['daily', 'question', 'hobby', 'meetup'];
 const MARKET = ['sell', 'buy', 'free'];
@@ -21,6 +22,7 @@ export class PostsService {
     @Inject(PointsService) private readonly points: PointsService,
     @Inject(GreetingsService) private readonly greetings: GreetingsService,
     @Inject(RateLimiter) private readonly rl: RateLimiter,
+    @Inject(PushService) private readonly push: PushService,
   ) {}
 
   /** $1 = viewer. 숨김·삭제 글, 탈퇴 회원, 차단 관계의 글은 보이지 않는다. */
@@ -186,6 +188,18 @@ export class PostsService {
       await q.query('INSERT INTO post_comments (post_id, author_id, body) VALUES ($1, $2, $3)', [id, userId, text]);
       await q.query('UPDATE posts SET comment_count = comment_count + 1 WHERE id = $1', [id]);
     });
+    // 글쓴이에게 댓글 알림(자기 글·차단 관계는 제외)
+    const p = await this.db.one<{ author_id: string; title: string; nickname: string }>(
+      `SELECT po.author_id, po.title, pr.nickname FROM posts po, profiles pr
+        WHERE po.id = $1 AND pr.user_id = $2 AND po.author_id <> $2
+          AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = po.author_id AND b.blocked_id = $2) OR (b.blocker_id = $2 AND b.blocked_id = po.author_id))`,
+      [id, userId],
+    );
+    if (p) {
+      await this.push
+        .send([{ userId: p.author_id, kind: 'comment', title: `${p.nickname} 님의 댓글`, body: `${p.title}: ${text.slice(0, 80)}`, privateBody: '내 글에 새 댓글이 달렸습니다.', data: { postId: id } }])
+        .catch(() => undefined);
+    }
     return this.get(userId, id);
   }
 

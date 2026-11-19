@@ -4,6 +4,7 @@ import { str } from '../common/validate';
 import { Db, Q } from '../db/db';
 import { MediaService } from '../media/media.service';
 import { Realtime } from '../realtime/realtime';
+import { PushService } from '../push/push.service';
 
 @Injectable()
 export class AccountService {
@@ -11,11 +12,16 @@ export class AccountService {
     @Inject(Db) private readonly db: Db,
     @Inject(Realtime) private readonly rt: Realtime,
     @Inject(MediaService) private readonly media: MediaService,
+    @Inject(PushService) private readonly push: PushService,
   ) {}
 
   /** 이용자에게 처리 결과 등을 알린다. */
   async notify(q: Q, userId: string, kind: string, title: string, body: string, ref: Record<string, unknown> = {}) {
     await q.query('INSERT INTO user_notices (user_id, kind, title, body, ref) VALUES ($1, $2, $3, $4, $5)', [userId, kind, title, body, JSON.stringify(ref)]);
+    // 운영 알림 푸시는 거래(트랜잭션)가 끝난 뒤에 보낸다.
+    setImmediate(() => {
+      this.push.send([{ userId, kind: 'notice', title, body: body.slice(0, 120), privateBody: '새 알림이 있습니다.', data: { kind: 'notice' } }]).catch(() => undefined);
+    });
   }
 
   async notices(userId: string) {

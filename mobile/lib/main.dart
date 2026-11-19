@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/app_state.dart';
 import 'core/brand.dart';
 import 'ui/chat_page.dart';
+import 'ui/board.dart' show PostDetailPage;
 import 'ui/home.dart';
 import 'ui/onboarding.dart';
 import 'ui/widgets.dart';
@@ -52,6 +53,9 @@ class _EumTalkAppState extends State<EumTalkApp> {
           builder: (_) => ChatPage(conversationId: conversationId, title: conv?.title ?? '대화'),
         ),
       );
+    } else if (data['postId'] is String) {
+      nav.popUntil((r) => r.isFirst);
+      nav.push(MaterialPageRoute<void>(builder: (_) => PostDetailPage(postId: data['postId'] as String)));
     } else if (data['kind'] == 'greeting') {
       HomeShell.selectTab(3);
       nav.popUntil((r) => r.isFirst);

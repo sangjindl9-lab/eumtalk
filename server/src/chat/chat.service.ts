@@ -223,7 +223,7 @@ export class ChatService {
     await this.push.send(
       targets.map((r) => ({
         userId: r.user_id,
-        kind: 'message' as const,
+        kind: group ? ('room' as const) : ('message' as const),
         title: group ? `${r.room_title}` : (message.senderNickname ?? '새 메시지'),
         body: group ? `${message.senderNickname ?? ''}: ${text}` : text,
         privateBody: '새 메시지가 도착했습니다.',

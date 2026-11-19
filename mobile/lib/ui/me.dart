@@ -6,6 +6,7 @@ import '../core/brand.dart';
 import 'me_more.dart';
 import 'media.dart';
 import 'points.dart';
+import 'notify_settings.dart';
 import 'profile_form.dart';
 import 'widgets.dart';
 
@@ -17,6 +18,14 @@ class MeTab extends StatelessWidget {
       await AppScope.read(context).updateMe({
         'settings': {key: value},
       });
+    } catch (e) {
+      if (context.mounted) showMessage(context, e.toString());
+    }
+  }
+
+  Future<void> _notify(BuildContext context, Map<String, dynamic> patch) async {
+    try {
+      await AppScope.read(context).updateMe({'notify': patch});
     } catch (e) {
       if (context.mounted) showMessage(context, e.toString());
     }
@@ -211,11 +220,18 @@ class MeTab extends StatelessWidget {
                   : null,
             ),
             header('알림'),
-            SwitchListTile(
-              title: const Text('알림에 메시지 내용 표시'),
-              subtitle: const Text('끄면 잠금화면 알림에 "새 메시지가 도착했습니다"만 보입니다.'),
-              value: me.pushPreview,
-              onChanged: (v) => _setting(context, 'pushPreview', v),
+            ListTile(
+              leading: Icon(me.notify.all ? Icons.notifications_active_outlined : Icons.notifications_off_outlined),
+              title: const Text('알림 설정'),
+              subtitle: Text(
+                !me.notify.all
+                    ? '모든 알림 꺼짐'
+                    : me.notify.quiet
+                    ? '켜짐 · 방해 금지 ${me.notify.quietStart}~${me.notify.quietEnd}'
+                    : '켜짐',
+              ),
+              trailing: Switch(value: me.notify.all, onChanged: (v) => _notify(context, {'all': v})),
+              onTap: () => open(const NotificationSettingsPage()),
             ),
             header('안전'),
             link(Icons.block_outlined, '차단 목록', const BlockListPage()),

@@ -1,3 +1,4 @@
+import { mergeNotify } from '../push/push.service';
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Put, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard, UserId } from '../common/auth.guard';
 import { bad, conflict, forbidden, notFound } from '../common/errors';
@@ -55,6 +56,7 @@ export class ProfileController {
       photoMediaId: r.photo_media_id,
       interestIds: r.interest_ids,
       settings: { showInNearby: r.show_in_nearby, showLastActive: r.show_last_active, acceptGreetings: r.accept_greetings, pushPreview: r.push_preview },
+      notify: mergeNotify(r.notify, null),
       browse: r.browse_until && new Date(r.browse_until) > new Date() ? { regionId: r.browse_region_id, regionName: r.browse_region_name, until: new Date(r.browse_until).toISOString() } : null,
       status: r.user_status,
       suspendedUntil: r.suspended_until ? new Date(r.suspended_until).toISOString() : null,
@@ -99,6 +101,10 @@ export class ProfileController {
     if (optBool(s.showLastActive) !== undefined) set('show_last_active', s.showLastActive);
     if (optBool(s.acceptGreetings) !== undefined) set('accept_greetings', s.acceptGreetings);
     if (optBool(s.pushPreview) !== undefined) set('push_preview', s.pushPreview);
+    if (body?.notify && typeof body.notify === 'object') {
+      const cur = await this.db.one<{ notify: any }>('SELECT notify FROM profiles WHERE user_id = $1', [userId]);
+      set('notify', JSON.stringify(mergeNotify(cur?.notify, body.notify)));
+    }
 
     await this.db.tx(async (q) => {
       if (body?.nickname !== undefined) {

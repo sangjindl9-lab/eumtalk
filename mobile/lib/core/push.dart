@@ -106,6 +106,21 @@ class PushService {
     } catch (_) {}
   }
 
+  /// 휴대폰 설정에서 이 앱의 알림을 막았는지. 알 수 없으면 null.
+  Future<bool?> blockedBySystem() async {
+    await init();
+    if (!_ready) return null;
+    try {
+      final s = await FirebaseMessaging.instance.getNotificationSettings();
+      return s.authorizationStatus == AuthorizationStatus.denied;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 알림 권한을 다시 묻고 토큰을 등록한다(설정 화면에서 알림을 켤 때).
+  Future<void> ensureRegistered(ApiClient api) => register(api);
+
   void dispose() {
     _refreshSub?.cancel();
     _openSub?.cancel();
