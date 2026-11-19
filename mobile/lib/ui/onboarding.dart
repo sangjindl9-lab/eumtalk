@@ -423,8 +423,15 @@ class SignupProfilePage extends StatefulWidget {
 
 class _SignupProfilePageState extends State<SignupProfilePage> {
   final _form = ProfileFormData();
+  final _invite = TextEditingController();
   bool _busy = false;
   String? _catalogError;
+
+  @override
+  void dispose() {
+    _invite.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -450,7 +457,16 @@ class _SignupProfilePageState extends State<SignupProfilePage> {
     final app = AppScope.read(context);
     setState(() => _busy = true);
     try {
-      final res = await app.api.post('/v1/auth/signup', {'signupToken': widget.signupToken, ..._form.toJson()});
+      // 초대 코드(선택)는 가입 전에 확인해서, 틀렸으면 고칠 기회를 준다.
+      final invite = _invite.text.trim();
+      if (invite.isNotEmpty) {
+        final c = await app.api.get('/v1/invite/check', query: {'code': invite});
+        if (c['valid'] != true) {
+          if (mounted) showMessage(context, '초대 코드를 다시 확인해 주세요. 없으면 비워 두고 가입할 수 있어요.');
+          return;
+        }
+      }
+      final res = await app.api.post('/v1/auth/signup', {'signupToken': widget.signupToken, ..._form.toJson(), if (invite.isNotEmpty) 'inviteCode': invite});
       await app.completeLogin(res['token'] as String);
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -487,6 +503,19 @@ class _SignupProfilePageState extends State<SignupProfilePage> {
           )
         else ...[
           ProfileForm(data: _form, onChanged: () => setState(() {})),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _invite,
+            textCapitalization: TextCapitalization.characters,
+            maxLength: 6,
+            decoration: const InputDecoration(
+              labelText: '초대 코드 (선택)',
+              hintText: '친구에게 받은 코드 6자리',
+              helperText: '입력하면 가입 포인트를 받아요',
+              counterText: '',
+              prefixIcon: Icon(Icons.card_giftcard_outlined),
+            ),
+          ),
           const SizedBox(height: 20),
           FilledButton(
             onPressed: _busy ? null : _submit,

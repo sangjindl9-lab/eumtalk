@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'board.dart';
 import 'chats.dart';
+import 'growth.dart' show maybePromptAttendance;
 import 'me.dart';
 import 'me_more.dart';
 import 'nearby.dart';
@@ -27,6 +28,10 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     HomeShell._requestedTab.addListener(_onTabRequest);
+    // 하루에 한 번 출석 체크 권유(잠깐 뒤에 띄워 첫 화면을 가리지 않는다)
+    Future<void>.delayed(const Duration(seconds: 2), () {
+      if (mounted && !(AppScope.read(context).me?.suspended ?? false)) maybePromptAttendance(context);
+    });
   }
 
   @override

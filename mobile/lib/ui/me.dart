@@ -4,6 +4,7 @@ import '../core/api.dart';
 import '../core/app_state.dart';
 import '../core/brand.dart';
 import 'me_more.dart';
+import 'growth.dart' show AttendanceCard, InvitePage;
 import 'media.dart';
 import 'points.dart';
 import 'notify_settings.dart';
@@ -158,8 +159,10 @@ class MeTab extends StatelessWidget {
                 ),
               ),
             ),
+            const Padding(padding: EdgeInsets.fromLTRB(20, 12, 20, 0), child: AttendanceCard()),
             header('포인트·이용권'),
             link(Icons.toll_outlined, '포인트·프리미엄', const PointsPage(), subtitle: '충전, 구독, 사용 내역'),
+            link(Icons.card_giftcard_outlined, '친구 초대하고 포인트 받기', const InvitePage(), subtitle: '친구도 나도 포인트'),
             ListTile(
               leading: const Icon(Icons.travel_explore_outlined),
               title: const Text('다른 지역 둘러보기'),

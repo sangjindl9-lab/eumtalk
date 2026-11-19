@@ -67,8 +67,8 @@ export class AuthController {
   }
 
   @Post('signup')
-  signup(@Body() body: any, @Headers('x-platform') platform?: string) {
-    return this.auth.signup(body, platformOf(platform));
+  signup(@Body() body: any, @Ip() ip: string, @Headers('x-platform') platform?: string) {
+    return this.auth.signup(body, platformOf(platform), ip || 'unknown');
   }
 
   @Post('logout')

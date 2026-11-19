@@ -32,6 +32,8 @@ import { SafetyService } from './safety/safety.service';
 import { SystemController } from './system/system.controller';
 import { LawController } from './law/law.controller';
 import { LawService } from './law/law.service';
+import { GrowthController } from './growth/growth.controller';
+import { GrowthService } from './growth/growth.service';
 
 @Module({})
 export class AppModule {
@@ -40,7 +42,7 @@ export class AppModule {
       module: AppModule,
       controllers: [
         SystemController, AuthController, ProfileController, GreetingsController, ChatController, SafetyController,
-        MediaController, RoomsController, PostsController, PointsController, AccountController, AdminController, PublicController, LawController,
+        MediaController, RoomsController, PostsController, PointsController, AccountController, AdminController, PublicController, LawController, GrowthController,
       ],
       providers: [
         { provide: CONFIG, useValue: cfg },
@@ -57,6 +59,7 @@ export class AppModule {
         MediaService,
         PushService,
         PointsService,
+        GrowthService,
         PurchasesService,
         RoomsService,
         PostsService,

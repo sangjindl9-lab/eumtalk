@@ -453,7 +453,7 @@ export class AdminService {
 
   async announcementList() {
     const rows = await this.db.query<any>('SELECT * FROM announcements ORDER BY created_at DESC LIMIT 100');
-    return { items: rows.map((r) => ({ id: r.id, title: r.title, body: r.body, published: r.published, createdAt: iso(r.created_at) })) };
+    return { items: rows.map((r) => ({ id: r.id, title: r.title, body: r.body, published: r.published, pushedAt: r.pushed_at ? iso(r.pushed_at) : null, pushCount: r.push_count ?? 0, createdAt: iso(r.created_at) })) };
   }
   async announce(admin: Admin, body: any) {
     const row = await this.db.one<{ id: string }>('INSERT INTO announcements (title, body, created_by) VALUES ($1, $2, $3) RETURNING id', [str(body?.title, '제목', 2, 80), str(body?.body, '내용', 2, 5000), admin.id]);

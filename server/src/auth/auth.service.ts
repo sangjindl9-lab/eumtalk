@@ -8,6 +8,7 @@ import { ContentFilter } from '../common/content-filter';
 import { Db, Q } from '../db/db';
 import { RateLimiter } from '../realtime/redis';
 import { Realtime } from '../realtime/realtime';
+import { GrowthService } from '../growth/growth.service';
 import { ageBand, assertIdentityConfigured, devIdentity, fetchPortoneIdentity, isAdult, portonePage } from './identity';
 
 const CODE_TTL_MIN = 5;
@@ -28,6 +29,7 @@ export class AuthService {
     @Inject(RateLimiter) private readonly rl: RateLimiter,
     @Inject(Realtime) private readonly rt: Realtime,
     @Inject(ContentFilter) private readonly filter: ContentFilter,
+    @Inject(GrowthService) private readonly growth: GrowthService,
   ) {}
 
   status() {
@@ -191,7 +193,7 @@ export class AuthService {
     return { adultVerified: true, ageBand: ageBand(result.birthYear) };
   }
 
-  async signup(body: any, platform: string | null) {
+  async signup(body: any, platform: string | null, ip: string | null = null) {
     assertIdentityConfigured(this.cfg); // 운영 환경 설정 누락 시 여기서 가입을 막는다.
     const nickname = str(body?.nickname, '닉네임', 2, 12);
     if (!NICKNAME.test(nickname)) throw bad('INVALID_NICKNAME', '닉네임은 한글·영문·숫자·밑줄 2~12자로 입력해 주세요.');
@@ -248,6 +250,9 @@ export class AuthService {
         );
       }
       await q.query('UPDATE signup_verifications SET consumed_at = now() WHERE id = $1', [v.id]);
+      await this.growth.assignInviteCode(q, user.id);
+      // 초대 코드(선택): 잘못된 코드여도 가입은 막지 않는다. 앱이 가입 전에 /v1/invite/check 로 먼저 확인한다.
+      if (body?.inviteCode) await this.growth.redeem(q, user.id, body.inviteCode, ip, false);
       const token = await this.createSession(q, user.id, platform);
       return { token, userId: user.id };
     });

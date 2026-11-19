@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../core/api.dart';
 import 'chat_page.dart';
@@ -660,6 +661,23 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
     }
   }
 
+  /// 모임을 카카오톡·문자로 공유. 내 친구 초대 코드·링크를 함께 넣어 새 회원 유입으로 이어지게 한다.
+  Future<void> _shareRoom(Json r) async {
+    final app = AppScope.read(context);
+    String invite = '';
+    try {
+      final me = await app.api.get('/v1/me/invite');
+      if (me['enabled'] == true) {
+        invite = '\n이음톡이 처음이면 가입할 때 초대 코드 ${me['code']} 를 넣어 주세요(${me['inviteeReward']}P).\n${me['link']}';
+      } else {
+        invite = '\n${me['link']}';
+      }
+    } catch (_) {}
+    final private = r['inviteCode'] != null ? '\n비밀방 초대 코드: ${r['inviteCode']}' : '';
+    final text = '[이음톡] "${r['title']}" 모임에 함께해요.\n앱에서 모임 탭 → "${r['title']}"를 찾아 들어오세요.$private$invite';
+    await SharePlus.instance.share(ShareParams(text: text, subject: '${r['title']} 모임 초대'));
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
@@ -689,6 +707,12 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                 await Navigator.of(context).push(MaterialPageRoute<Json>(builder: (_) => RoomEditPage(room: r)));
                 _load();
               },
+            ),
+          if (r['isPrivate'] != true || r['inviteCode'] != null)
+            IconButton(
+              icon: const Icon(Icons.share_outlined),
+              tooltip: '모임 공유',
+              onPressed: () => _shareRoom(r),
             ),
           IconButton(
             icon: const Icon(Icons.flag_outlined),

@@ -24,6 +24,7 @@ const SECTIONS: { id: string; label: string; roles: string[] }[] = [
   { id: 'ledger', label: '포인트 원장', roles: ['finance'] },
   { id: 'purchases', label: '결제·환불', roles: ['finance'] },
   { id: 'prices', label: '가격 설정', roles: ['finance'] },
+  { id: 'growth', label: '마케팅·초대', roles: ['support', 'finance'] },
   { id: 'announcements', label: '운영 공지', roles: ['support'] },
   { id: 'inquiries', label: '문의', roles: ['support'] },
   { id: 'law', label: '수사기관 요청', roles: [] },
@@ -168,6 +169,7 @@ export default function AdminApp({ apiBase }: { apiBase: string }) {
         {current.id === 'announcements' && <Announcements call={call} />}
         {current.id === 'inquiries' && <Inquiries call={call} />}
         {current.id === 'law' && <LawRequests call={call} />}
+        {current.id === 'growth' && <Growth call={call} />}
         {current.id === 'admins' && <Admins call={call} />}
         {current.id === 'audit' && <Audit call={call} />}
       </main>
@@ -744,7 +746,11 @@ function Announcements({ call }: { call: Call }) {
     const f = new FormData(e.currentTarget);
     const form = e.currentTarget;
     act.run(async () => {
-      await call('POST', '/announcements', { title: f.get('title'), body: f.get('body') });
+      const r = await call('POST', '/announcements', { title: f.get('title'), body: f.get('body') });
+      if (f.get('push') === 'on' && r?.id) {
+        const p = await call('POST', `/announcements/${r.id}/push`);
+        window.alert(`${num.format(p.sent)}명에게 알림을 보냈습니다. 알림을 꺼 둔 회원에게는 가지 않습니다.`);
+      }
       form.reset();
     });
   };
@@ -754,6 +760,9 @@ function Announcements({ call }: { call: Call }) {
         <h2>새 공지</h2>
         <input name="title" placeholder="제목" required />
         <textarea name="body" placeholder="내용" rows={4} required />
+        <label className="inline">
+          <input type="checkbox" name="push" /> 모든 회원에게 휴대폰 알림도 보내기 (이벤트 안내 등)
+        </label>
         <div className="actions">
           <button className="primary" type="submit">
             등록
@@ -767,9 +776,129 @@ function Announcements({ call }: { call: Call }) {
           ['등록', (r) => when(r.createdAt), 'nowrap'],
           ['제목', (r) => r.title],
           ['내용', (r) => r.body],
-          ['', (r) => <button onClick={() => act.run(() => call('POST', `/announcements/${r.id}/published`, { published: !r.published }))}>{r.published ? '내리기' : '다시 게시'}</button>, 'right'],
+          ['알림', (r) => (r.pushedAt ? `${num.format(r.pushCount)}명 · ${when(r.pushedAt)}` : '-'), 'nowrap'],
+          [
+            '',
+            (r) => (
+              <span className="inline">
+                {!r.pushedAt && r.published && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm('이 공지를 모든 회원에게 휴대폰 알림으로 보낼까요? 한 번만 보낼 수 있습니다.')) act.run(() => call('POST', `/announcements/${r.id}/push`));
+                    }}
+                  >
+                    알림 보내기
+                  </button>
+                )}
+                <button onClick={() => act.run(() => call('POST', `/announcements/${r.id}/published`, { published: !r.published }))}>{r.published ? '내리기' : '다시 게시'}</button>
+              </span>
+            ),
+            'right',
+          ],
         ]}
       />
+    </Page>
+  );
+}
+
+function Growth({ call }: { call: Call }) {
+  const [days, setDays] = useState('14');
+  const { data, error, reload } = useLoad(() => call('GET', `/growth?days=${days}`), [days]);
+  const act = useAction(reload);
+  const s = data?.settings;
+  const t = data?.totals;
+  const save = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const n = (k: string) => Number(f.get(k));
+    act.run(() =>
+      call('POST', '/growth/settings', {
+        inviteEnabled: f.get('inviteEnabled') === 'on',
+        inviteeReward: n('inviteeReward'),
+        inviterReward: n('inviterReward'),
+        inviterMonthlyCap: n('inviterMonthlyCap'),
+        redeemWindowDays: n('redeemWindowDays'),
+        attendanceEnabled: f.get('attendanceEnabled') === 'on',
+        attendancePoints: n('attendancePoints'),
+        streakDays: n('streakDays'),
+        streakBonus: n('streakBonus'),
+      }),
+    );
+  };
+  const field = (name: string, label: string, v: number) => (
+    <label className="stack">
+      <span>{label}</span>
+      <input name={name} type="number" min={0} defaultValue={v} required />
+    </label>
+  );
+  return (
+    <Page title="마케팅·초대" sub="친구 초대와 출석 체크 보상, 가입·방문 추이입니다. 이벤트 알림은 운영 공지에서 보냅니다" error={error || act.error}>
+      {t && (
+        <div className="grid2">
+          <div className="panel">
+            <h2>누적</h2>
+            <p>회원 {num.format(t.members)}명 · 초대 가입 {num.format(t.referrals)}명</p>
+            <p>초대 보상 완료 {num.format(t.rewarded)}건 · 보상 제외 {num.format(t.blocked)}건 (같은 IP·월 한도)</p>
+            <p>지급 포인트: 초대 {num.format(t.referralPoints)}P · 출석 {num.format(t.attendancePoints)}P</p>
+          </div>
+          <div className="panel">
+            <h2>초대를 많이 한 회원</h2>
+            {(data?.topInviters || []).length === 0 ? (
+              <p>아직 없습니다</p>
+            ) : (
+              <ul>
+                {data.topInviters.slice(0, 8).map((r: Row) => (
+                  <li key={r.userId}>
+                    {r.nickname || '(탈퇴)'} — 초대 {r.invited} · 보상 {r.rewarded}
+                    {r.blocked ? ` · 제외 ${r.blocked}` : ''}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+      <h2 className="sub">일별 추이</h2>
+      <Tabs value={days} onChange={setDays} options={[['7', '7일'], ['14', '14일'], ['30', '30일'], ['90', '90일']]} />
+      <Table
+        empty=""
+        rows={data?.daily}
+        cols={[
+          ['날짜', (r) => r.day, 'nowrap'],
+          ['신규 가입', (r) => num.format(r.signups), 'num'],
+          ['초대 가입', (r) => num.format(r.invited), 'num'],
+          ['방문 회원', (r) => num.format(r.active), 'num'],
+          ['출석', (r) => num.format(r.attendance), 'num'],
+        ]}
+      />
+      {s && (
+        <form className="panel stack" onSubmit={save} key={JSON.stringify(s)}>
+          <h2>보상 설정</h2>
+          <label className="inline">
+            <input type="checkbox" name="inviteEnabled" defaultChecked={s.inviteEnabled} /> 친구 초대 보상 켜기
+          </label>
+          <div className="grid2">
+            {field('inviteeReward', '초대받은 친구 가입 보상(P)', s.inviteeReward)}
+            {field('inviterReward', '초대한 회원 보상(P)', s.inviterReward)}
+            {field('inviterMonthlyCap', '초대한 회원 월 보상 한도(명)', s.inviterMonthlyCap)}
+            {field('redeemWindowDays', '가입 후 코드 입력 가능 기간(일)', s.redeemWindowDays)}
+          </div>
+          <label className="inline">
+            <input type="checkbox" name="attendanceEnabled" defaultChecked={s.attendanceEnabled} /> 출석 체크 켜기
+          </label>
+          <div className="grid2">
+            {field('attendancePoints', '하루 출석 포인트(P)', s.attendancePoints)}
+            {field('streakDays', '연속 보너스 기준(일)', s.streakDays)}
+            {field('streakBonus', '연속 보너스(P)', s.streakBonus)}
+          </div>
+          <p className="muted">포인트 100P = 1,200원 상품 기준입니다. 초대한 회원 보상은 친구가 가입 다음 날 이후 다시 와서 출석해야 지급되고, 같은 IP에서 만든 계정은 제외됩니다.</p>
+          <div className="actions">
+            <button className="primary" type="submit">
+              저장
+            </button>
+          </div>
+        </form>
+      )}
     </Page>
   );
 }
