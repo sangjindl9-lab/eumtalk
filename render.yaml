@@ -17,7 +17,7 @@ services:
   - type: web
     name: eumtalk-api
     runtime: node
-    plan: free
+    plan: starter # 무료는 15분 쉬면 잠들어 첫 접속이 느리다
     region: singapore
     rootDir: server
     buildCommand: npm ci --include=dev && npm run build
