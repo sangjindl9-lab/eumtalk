@@ -34,6 +34,8 @@ import { LawController } from './law/law.controller';
 import { LawService } from './law/law.service';
 import { GrowthController } from './growth/growth.controller';
 import { GrowthService } from './growth/growth.service';
+import { MonetizeController } from './growth/monetize.controller';
+import { MonetizeService } from './growth/monetize.service';
 
 @Module({})
 export class AppModule {
@@ -42,7 +44,7 @@ export class AppModule {
       module: AppModule,
       controllers: [
         SystemController, AuthController, ProfileController, GreetingsController, ChatController, SafetyController,
-        MediaController, RoomsController, PostsController, PointsController, AccountController, AdminController, PublicController, LawController, GrowthController,
+        MediaController, RoomsController, PostsController, PointsController, AccountController, AdminController, PublicController, LawController, GrowthController, MonetizeController,
       ],
       providers: [
         { provide: CONFIG, useValue: cfg },
@@ -60,6 +62,7 @@ export class AppModule {
         PushService,
         PointsService,
         GrowthService,
+        MonetizeService,
         PurchasesService,
         RoomsService,
         PostsService,

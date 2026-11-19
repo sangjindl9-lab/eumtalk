@@ -25,6 +25,7 @@ const SECTIONS: { id: string; label: string; roles: string[] }[] = [
   { id: 'purchases', label: '결제·환불', roles: ['finance'] },
   { id: 'prices', label: '가격 설정', roles: ['finance'] },
   { id: 'growth', label: '마케팅·초대', roles: ['support', 'finance'] },
+  { id: 'campaigns', label: '단체 알림', roles: ['support'] },
   { id: 'announcements', label: '운영 공지', roles: ['support'] },
   { id: 'inquiries', label: '문의', roles: ['support'] },
   { id: 'law', label: '수사기관 요청', roles: [] },
@@ -170,6 +171,7 @@ export default function AdminApp({ apiBase }: { apiBase: string }) {
         {current.id === 'inquiries' && <Inquiries call={call} />}
         {current.id === 'law' && <LawRequests call={call} />}
         {current.id === 'growth' && <Growth call={call} />}
+        {current.id === 'campaigns' && <Campaigns call={call} />}
         {current.id === 'admins' && <Admins call={call} />}
         {current.id === 'audit' && <Audit call={call} />}
       </main>
@@ -761,7 +763,7 @@ function Announcements({ call }: { call: Call }) {
         <input name="title" placeholder="제목" required />
         <textarea name="body" placeholder="내용" rows={4} required />
         <label className="inline">
-          <input type="checkbox" name="push" /> 모든 회원에게 휴대폰 알림도 보내기 (이벤트 안내 등)
+          <input type="checkbox" name="push" /> 모든 회원에게 휴대폰 알림도 보내기 (서비스 안내용. 이벤트·쿠폰은 "단체 알림"의 광고성으로 보내세요)
         </label>
         <div className="actions">
           <button className="primary" type="submit">
@@ -822,6 +824,13 @@ function Growth({ call }: { call: Call }) {
         attendancePoints: n('attendancePoints'),
         streakDays: n('streakDays'),
         streakBonus: n('streakBonus'),
+        vipDiscountPercent: n('vipDiscountPercent'),
+        giftMin: n('giftMin'),
+        giftMax: n('giftMax'),
+        giftDailyMax: n('giftDailyMax'),
+        recommendEnabled: f.get('recommendEnabled') === 'on',
+        recommendCount: n('recommendCount'),
+        recommendHour: n('recommendHour'),
       }),
     );
   };
@@ -832,7 +841,7 @@ function Growth({ call }: { call: Call }) {
     </label>
   );
   return (
-    <Page title="마케팅·초대" sub="친구 초대와 출석 체크 보상, 가입·방문 추이입니다. 이벤트 알림은 운영 공지에서 보냅니다" error={error || act.error}>
+    <Page title="마케팅·초대" sub="친구 초대·출석·VIP·선물·추천 설정과 가입·방문 추이입니다. 이벤트 알림은 단체 알림에서 보냅니다" error={error || act.error}>
       {t && (
         <div className="grid2">
           <div className="panel">
@@ -891,6 +900,21 @@ function Growth({ call }: { call: Call }) {
             {field('streakDays', '연속 보너스 기준(일)', s.streakDays)}
             {field('streakBonus', '연속 보너스(P)', s.streakBonus)}
           </div>
+          <h2>VIP·선물·추천</h2>
+          <div className="grid2">
+            {field('vipDiscountPercent', 'VIP 유료 기능 할인(%)', s.vipDiscountPercent)}
+            {field('giftMin', '선물 최소(P)', s.giftMin)}
+            {field('giftMax', '선물 1회 최대(P)', s.giftMax)}
+            {field('giftDailyMax', '선물 하루 최대(P)', s.giftDailyMax)}
+          </div>
+          <label className="inline">
+            <input type="checkbox" name="recommendEnabled" defaultChecked={s.recommendEnabled} /> 오늘의 추천 친구 켜기
+          </label>
+          <div className="grid2">
+            {field('recommendCount', '하루 추천 인원', s.recommendCount)}
+            {field('recommendHour', '추천 알림 시각(시, 7~21)', s.recommendHour)}
+          </div>
+          <p className="muted">프로필 부스트·나를 본 사람 가격은 "가격 설정"에서 바꿉니다. VIP 매달 지급 포인트는 "가격 설정 → 스토어 상품"에서 바꿉니다.</p>
           <p className="muted">포인트 100P = 1,200원 상품 기준입니다. 초대한 회원 보상은 친구가 가입 다음 날 이후 다시 와서 출석해야 지급되고, 같은 IP에서 만든 계정은 제외됩니다.</p>
           <div className="actions">
             <button className="primary" type="submit">
@@ -899,6 +923,108 @@ function Growth({ call }: { call: Call }) {
           </div>
         </form>
       )}
+    </Page>
+  );
+}
+
+function Campaigns({ call }: { call: Call }) {
+  const { data, error, reload } = useLoad(() => call('GET', '/campaigns'), []);
+  const act = useAction(reload);
+  const [advertising, setAdvertising] = useState(true);
+  const [segment, setSegment] = useState('all');
+  const [days, setDays] = useState(7);
+  const [sido, setSido] = useState('');
+  const [preview, setPreview] = useState<Row | null>(null);
+  const target = { segment, days, sido };
+  useEffect(() => {
+    let alive = true;
+    call('POST', '/campaigns/preview', { advertising, target }).then((r) => alive && setPreview(r)).catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [advertising, segment, days, sido]);
+  const submit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const n = preview?.count ?? 0;
+    if (!window.confirm(`${num.format(n)}명에게 ${advertising ? '광고성 ' : ''}알림을 보낼까요? 보낸 알림은 취소할 수 없습니다.`)) return;
+    act.run(async () => {
+      const r = await call('POST', '/campaigns', { advertising, title: f.get('title'), body: f.get('body'), target });
+      window.alert(`${num.format(r.sent)}명에게 보냈습니다. 알림을 꺼 둔 회원과 방해 금지 시간인 회원에게는 가지 않습니다.`);
+      form.reset();
+    });
+  };
+  return (
+    <Page title="단체 알림" sub="회원 휴대폰으로 알림을 보냅니다. 앱 안 공지가 필요하면 운영 공지를 함께 등록하세요" error={error || act.error}>
+      <form className="panel stack" onSubmit={submit}>
+        <h2>새 알림</h2>
+        <div className="checks">
+          <label className="inline">
+            <input type="radio" name="adv" checked={advertising} onChange={() => setAdvertising(true)} /> 광고성(이벤트·쿠폰·할인)
+          </label>
+          <label className="inline">
+            <input type="radio" name="adv" checked={!advertising} onChange={() => setAdvertising(false)} /> 서비스 안내(점검·정책 변경 등, 광고 아님)
+          </label>
+        </div>
+        {advertising && (
+          <p className="muted">
+            광고성 알림은 정보통신망법에 따라 수신 동의한 회원에게만 가고, 제목 앞에 "(광고)", 끝에 수신거부 방법이 자동으로 붙습니다. 오후 9시~오전 8시에는 보낼 수 없습니다.
+          </p>
+        )}
+        <div className="grid2">
+          <label className="stack">
+            <span>대상</span>
+            <select value={segment} onChange={(e) => setSegment(e.target.value)}>
+              <option value="all">전체 회원</option>
+              <option value="active">최근 N일 안에 접속한 회원</option>
+              <option value="inactive">N일 넘게 접속하지 않은 회원(복귀 유도)</option>
+              <option value="vip">VIP 구독 회원</option>
+            </select>
+          </label>
+          {(segment === 'active' || segment === 'inactive') && (
+            <label className="stack">
+              <span>N일</span>
+              <input type="number" min={1} max={365} value={days} onChange={(e) => setDays(Number(e.target.value) || 1)} />
+            </label>
+          )}
+          <label className="stack">
+            <span>지역(시·도)</span>
+            <select value={sido} onChange={(e) => setSido(e.target.value)}>
+              <option value="">전국</option>
+              {(preview?.sidos || []).map((x: string) => (
+                <option key={x} value={x}>
+                  {x}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <input name="title" placeholder="제목 (예: 이번 주말 포인트 2배 이벤트)" maxLength={60} required />
+        <textarea name="body" placeholder="내용 (200자 이내)" rows={3} maxLength={200} required />
+        <div className="actions">
+          <span className="muted">
+            받을 회원 {num.format(preview?.count ?? 0)}명{preview?.nightBlocked ? ' · 지금은 야간이라 광고성 알림을 보낼 수 없습니다' : ''}
+          </span>
+          <button className="primary" type="submit" disabled={!preview || preview.count === 0 || preview.nightBlocked}>
+            보내기
+          </button>
+        </div>
+      </form>
+      <Table
+        empty="보낸 알림이 없습니다"
+        rows={data?.items}
+        cols={[
+          ['보낸 때', (r) => when(r.createdAt), 'nowrap'],
+          ['종류', (r) => (r.advertising ? '광고성' : '서비스'), 'nowrap'],
+          ['제목', (r) => r.title],
+          ['내용', (r) => r.body],
+          ['대상', (r) => `${({ all: '전체', active: `최근 ${r.target.days}일 접속`, inactive: `${r.target.days}일 미접속`, vip: 'VIP' } as Record<string, string>)[r.target.segment] || r.target.segment}${r.target.sido ? ` · ${r.target.sido}` : ''}`],
+          ['발송', (r) => num.format(r.sent), 'num'],
+          ['보낸 사람', (r) => r.adminName || ''],
+        ]}
+      />
     </Page>
   );
 }

@@ -6,6 +6,7 @@ import '../core/brand.dart';
 import 'me_more.dart';
 import 'growth.dart' show AttendanceCard, InvitePage;
 import 'media.dart';
+import 'monetize.dart' show VipBadge, VisitorsPage, showBoostSheet;
 import 'points.dart';
 import 'notify_settings.dart';
 import 'profile_form.dart';
@@ -148,7 +149,12 @@ class MeTab extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(me.nickname, style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                            Row(
+                              children: [
+                                Flexible(child: Text(me.nickname, style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700))),
+                                if (me.vip) ...[const SizedBox(width: 6), const VipBadge()],
+                              ],
+                            ),
                             Text('${me.ageBand} · ${me.regionName}', style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                           ],
                         ),
@@ -161,8 +167,16 @@ class MeTab extends StatelessWidget {
             ),
             const Padding(padding: EdgeInsets.fromLTRB(20, 12, 20, 0), child: AttendanceCard()),
             header('포인트·이용권'),
-            link(Icons.toll_outlined, '포인트·프리미엄', const PointsPage(), subtitle: '충전, 구독, 사용 내역'),
+            link(Icons.toll_outlined, '포인트·VIP', const PointsPage(), subtitle: '충전, VIP 구독, 사용 내역'),
             link(Icons.card_giftcard_outlined, '친구 초대하고 포인트 받기', const InvitePage(), subtitle: '친구도 나도 포인트'),
+            link(Icons.visibility_outlined, '나를 본 사람', const VisitorsPage(), subtitle: '오늘 누가 내 프로필을 봤을까요?'),
+            ListTile(
+              leading: const Icon(Icons.rocket_launch_outlined),
+              title: const Text('내 프로필 띄우기'),
+              subtitle: Text(me.boostUntil != null && me.boostUntil!.isAfter(DateTime.now()) ? '부스트 중 · ${TimeOfDay.fromDateTime(me.boostUntil!.toLocal()).format(context)}까지' : '30분 동안 주변 사람 맨 위에 보여요'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => showBoostSheet(context),
+            ),
             ListTile(
               leading: const Icon(Icons.travel_explore_outlined),
               title: const Text('다른 지역 둘러보기'),
@@ -198,6 +212,12 @@ class MeTab extends StatelessWidget {
               subtitle: const Text('"오늘 활동" 같은 표시를 다른 회원에게 보여줍니다.'),
               value: me.showLastActive,
               onChanged: (v) => _setting(context, 'showLastActive', v),
+            ),
+            SwitchListTile(
+              title: const Text('내 방문 기록 남기기'),
+              subtitle: const Text('끄면 상대의 "나를 본 사람"에 내가 남지 않고, 나도 내 방문자를 볼 수 없어요.'),
+              value: me.leaveFootprints,
+              onChanged: (v) => _setting(context, 'leaveFootprints', v),
             ),
             SwitchListTile(
               title: const Text('새 인사 받기'),

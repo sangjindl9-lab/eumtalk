@@ -56,6 +56,9 @@ class _EumTalkAppState extends State<EumTalkApp> {
     } else if (data['postId'] is String) {
       nav.popUntil((r) => r.isFirst);
       nav.push(MaterialPageRoute<void>(builder: (_) => PostDetailPage(postId: data['postId'] as String)));
+    } else if (data['kind'] == 'recommend') {
+      HomeShell.selectTab(0);
+      nav.popUntil((r) => r.isFirst);
     } else if (data['kind'] == 'greeting') {
       HomeShell.selectTab(3);
       nav.popUntil((r) => r.isFirst);

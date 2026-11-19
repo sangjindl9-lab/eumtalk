@@ -5,6 +5,7 @@ import '../core/models.dart';
 import 'board.dart';
 import 'chat_page.dart';
 import 'media.dart';
+import 'monetize.dart' show VipBadge;
 import 'nearby.dart';
 import 'widgets.dart';
 
@@ -160,7 +161,12 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(p.nickname, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+                    Row(
+                      children: [
+                        Flexible(child: Text(p.nickname, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700))),
+                        if (p.vip) ...[const SizedBox(width: 8), const VipBadge()],
+                      ],
+                    ),
                     const SizedBox(height: 2),
                     Text(meta, style: t.textTheme.bodyLarge?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                     const SizedBox(height: 6),

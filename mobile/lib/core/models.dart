@@ -17,7 +17,9 @@ class PublicProfile {
       commonInterests = _strings(j['commonInterests']),
       proximity = (j['proximity'] ?? 'far') as String,
       activity = j['activity'] as String?,
-      acceptsGreetings = (j['acceptsGreetings'] ?? true) as bool;
+      acceptsGreetings = (j['acceptsGreetings'] ?? true) as bool,
+      boosted = (j['boosted'] ?? false) as bool,
+      vip = (j['vip'] ?? false) as bool;
 
   final String userId;
   final String nickname;
@@ -32,6 +34,12 @@ class PublicProfile {
   final String proximity;
   final String? activity;
   final bool acceptsGreetings;
+
+  /// 프로필 부스트 중(목록 맨 위)
+  final bool boosted;
+
+  /// VIP 구독 회원
+  final bool vip;
 
   /// 거리는 넓은 범위 문구로만 보여준다.
   String get proximityLabel {
@@ -87,6 +95,8 @@ class NotifyPrefs {
       room = (j['room'] ?? true) as bool,
       comment = (j['comment'] ?? true) as bool,
       notice = (j['notice'] ?? true) as bool,
+      recommend = (j['recommend'] ?? true) as bool,
+      marketing = (j['marketing'] ?? false) as bool,
       quiet = (j['quiet'] ?? false) as bool,
       quietStart = (j['quietStart'] ?? '23:00') as String,
       quietEnd = (j['quietEnd'] ?? '08:00') as String;
@@ -97,6 +107,8 @@ class NotifyPrefs {
   final bool room;
   final bool comment;
   final bool notice;
+  final bool recommend;
+  final bool marketing;
   final bool quiet;
   final String quietStart;
   final String quietEnd;
@@ -120,6 +132,10 @@ class Me {
       acceptGreetings = (j['settings']?['acceptGreetings'] ?? true) as bool,
       pushPreview = (j['settings']?['pushPreview'] ?? true) as bool,
       notify = NotifyPrefs.fromJson((j['notify'] as Map?)?.cast<String, dynamic>() ?? const {}),
+      leaveFootprints = (j['leaveFootprints'] ?? true) as bool,
+      marketingConsentAt = j['marketingConsentAt'] as String?,
+      boostUntil = j['boostUntil'] == null ? null : DateTime.tryParse(j['boostUntil'] as String),
+      vip = (j['vip'] ?? false) as bool,
       browse = (j['browse'] as Map?)?.cast<String, dynamic>(),
       status = (j['status'] ?? 'active') as String,
       locationShared = (j['locationShared'] ?? false) as bool;
@@ -139,6 +155,10 @@ class Me {
   final bool acceptGreetings;
   final bool pushPreview;
   final NotifyPrefs notify;
+  final bool leaveFootprints;
+  final String? marketingConsentAt;
+  final DateTime? boostUntil;
+  final bool vip;
   final String? photoMediaId;
 
   /// 다른 지역 둘러보기 이용 중이면 {regionId, regionName, until}

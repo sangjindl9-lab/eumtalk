@@ -57,6 +57,10 @@ export class ProfileController {
       interestIds: r.interest_ids,
       settings: { showInNearby: r.show_in_nearby, showLastActive: r.show_last_active, acceptGreetings: r.accept_greetings, pushPreview: r.push_preview },
       notify: mergeNotify(r.notify, null),
+      leaveFootprints: r.leave_footprints,
+      marketingConsentAt: r.marketing_consent_at ? new Date(r.marketing_consent_at).toISOString() : null,
+      boostUntil: r.boost_until && new Date(r.boost_until) > new Date() ? new Date(r.boost_until).toISOString() : null,
+      vip: !!(await this.db.one(`SELECT 1 FROM subscriptions WHERE user_id = $1 AND status = 'active' AND expires_at > now()`, [r.user_id])),
       browse: r.browse_until && new Date(r.browse_until) > new Date() ? { regionId: r.browse_region_id, regionName: r.browse_region_name, until: new Date(r.browse_until).toISOString() } : null,
       status: r.user_status,
       suspendedUntil: r.suspended_until ? new Date(r.suspended_until).toISOString() : null,
@@ -101,9 +105,14 @@ export class ProfileController {
     if (optBool(s.showLastActive) !== undefined) set('show_last_active', s.showLastActive);
     if (optBool(s.acceptGreetings) !== undefined) set('accept_greetings', s.acceptGreetings);
     if (optBool(s.pushPreview) !== undefined) set('push_preview', s.pushPreview);
+    if (optBool(s.leaveFootprints) !== undefined) set('leave_footprints', s.leaveFootprints);
     if (body?.notify && typeof body.notify === 'object') {
       const cur = await this.db.one<{ notify: any }>('SELECT notify FROM profiles WHERE user_id = $1', [userId]);
-      set('notify', JSON.stringify(mergeNotify(cur?.notify, body.notify)));
+      const before = mergeNotify(cur?.notify, null);
+      const next = mergeNotify(cur?.notify, body.notify);
+      set('notify', JSON.stringify(next));
+      // 광고성 정보 수신 동의·철회 일시를 남긴다(앱이 동의 사실을 안내).
+      if (next.marketing !== before.marketing) set('marketing_consent_at', next.marketing ? new Date() : null);
     }
 
     await this.db.tx(async (q) => {
@@ -200,6 +209,15 @@ export class ProfileController {
     if (id === userId) throw bad('INVALID_INPUT', '내 프로필은 내 정보에서 확인해 주세요.');
     const [profile] = await selectPublicProfiles(this.db, { viewerId: userId, onlyUserId: id, limit: 1 });
     if (!profile) throw notFound('프로필을 볼 수 없는 회원입니다.');
+    // 나를 본 사람: 하루 한 줄(방문 기록 남기기를 끈 회원은 남기지 않는다)
+    await this.db
+      .query(
+        `INSERT INTO profile_views (viewer_id, viewed_id, day)
+         SELECT $1, $2, (now() AT TIME ZONE 'Asia/Seoul')::date FROM profiles WHERE user_id = $1 AND leave_footprints
+         ON CONFLICT (viewed_id, day, viewer_id) DO UPDATE SET at = now()`,
+        [userId, id],
+      )
+      .catch(() => undefined);
     const [low, high] = userId < id ? [userId, id] : [id, userId];
     const conv = await this.db.one<{ id: string }>(
       `SELECT id FROM conversations WHERE type = 'direct' AND user_low = $1 AND user_high = $2`,

@@ -8,6 +8,7 @@ import '../core/api.dart';
 import '../core/app_state.dart';
 import '../core/models.dart';
 import 'media.dart';
+import 'monetize.dart' show showGiftDialog;
 import 'profile_page.dart';
 import 'rooms.dart';
 import 'widgets.dart';
@@ -325,9 +326,11 @@ class _ChatPageState extends State<ChatPage> {
                     if (v == 'leave') _leave(conv);
                     if (v == 'room') Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => RoomDetailPage(roomId: conv.id)));
                     if (v == 'block') _block(conv);
+                    if (v == 'gift') showGiftDialog(context, conversationId: conv.id, peerName: conv.title);
                     if (v == 'report') showReportSheet(context, targetType: group ? 'room' : 'profile', targetId: group ? conv.id : conv.peerId);
                   },
                   itemBuilder: (context) => [
+                    if (!group && !conv.blockedByMe) const PopupMenuItem(value: 'gift', child: Text('포인트 선물하기')),
                     PopupMenuItem(value: 'mute', child: Text(conv.muted ? '알림 켜기' : '알림 끄기')),
                     const PopupMenuItem(value: 'export', child: Text('대화 내용 내보내기(TXT)')),
                     if (group) const PopupMenuItem(value: 'room', child: Text('방 정보·나가기')) else const PopupMenuItem(value: 'leave', child: Text('방 나가기')),
@@ -461,6 +464,16 @@ class _Bubble extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           child: MediaImage(mediaId: m.mediaId!, width: 220, height: 220),
         ),
+      );
+    } else if (m.kind == 'gift') {
+      content = Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.card_giftcard, color: fg, size: 22),
+          const SizedBox(width: 8),
+          Flexible(child: Text(m.body, style: t.textTheme.bodyLarge?.copyWith(color: fg, fontWeight: FontWeight.w600))),
+        ],
       );
     } else {
       content = Text(m.body, style: t.textTheme.bodyLarge?.copyWith(color: fg));

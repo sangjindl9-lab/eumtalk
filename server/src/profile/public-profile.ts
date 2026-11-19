@@ -20,6 +20,10 @@ export interface PublicProfile {
   proximity: 'same_neighborhood' | 'nearby' | 'same_region' | 'same_province' | 'far' | 'visiting';
   activity: 'now' | 'today' | 'week' | 'earlier' | null;
   acceptsGreetings: boolean;
+  /** 프로필 부스트 중(목록 맨 위) */
+  boosted: boolean;
+  /** VIP 구독 회원 배지 */
+  vip: boolean;
 }
 
 export interface ListFilter {
@@ -61,6 +65,8 @@ export async function selectPublicProfiles(q: Q, f: ListFilter): Promise<PublicP
   // rank: 0 같은 동네, 1 가까운 지역/같은 지역, 2 같은 시·도, 3 그 외
   const inner = `
     SELECT p.user_id, p.nickname, p.age_band, p.bio, p.avatar_color, p.accept_greetings, p.photo_media_id,
+           coalesce(p.boost_until > now(), false) AS boosted,
+           EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = p.user_id AND s.status = 'active' AND s.expires_at > now()) AS vip,
            (p.browse_until > now() AND p.browse_region_id = vr.id AND r.id <> vr.id) AS visiting,
            CASE WHEN p.gender_public THEN p.gender END AS gender,
            r.name AS region_name,
@@ -91,15 +97,16 @@ export async function selectPublicProfiles(q: Q, f: ListFilter): Promise<PublicP
     if (f.scope === 'near' || !f.scope) scopeWhere = 'WHERE y.rank <= 1 OR y.same_region OR y.visiting';
     else if (f.scope === 'sido') scopeWhere = 'WHERE y.rank <= 2';
   }
+  // 부스트 중인 프로필은 범위 안에서 맨 위에 보인다.
   const order =
     f.sort === 'recent'
-      ? `ORDER BY y.seen_at DESC NULLS LAST, y.user_id`
-      : `ORDER BY y.rank, y.seen_at DESC NULLS LAST, y.user_id`;
+      ? `ORDER BY y.boosted DESC, y.seen_at DESC NULLS LAST, y.user_id`
+      : `ORDER BY y.boosted DESC, y.rank, y.seen_at DESC NULLS LAST, y.user_id`;
   const limit = add(f.limit ?? 30);
   const offset = add(f.offset ?? 0);
 
   const rows = await q.query<any>(
-    `SELECT y.user_id, y.nickname, y.age_band, y.bio, y.avatar_color, y.accept_greetings, y.gender, y.region_name, y.photo_media_id, y.visiting,
+    `SELECT y.user_id, y.nickname, y.age_band, y.bio, y.avatar_color, y.accept_greetings, y.gender, y.region_name, y.photo_media_id, y.visiting, y.boosted, y.vip,
             y.rank, (y.dist IS NOT NULL) AS has_dist, y.same_region,
             CASE WHEN y.seen_at IS NULL THEN NULL
                  WHEN y.seen_at > now() - interval '10 minutes' THEN 'now'
@@ -132,5 +139,7 @@ export async function selectPublicProfiles(q: Q, f: ListFilter): Promise<PublicP
       : r.rank === 0 ? 'same_neighborhood' : r.rank === 1 ? (r.has_dist ? 'nearby' : 'same_region') : r.rank === 2 ? 'same_province' : 'far',
     activity: r.activity,
     acceptsGreetings: r.accept_greetings,
+    boosted: r.boosted === true,
+    vip: r.vip === true,
   }));
 }

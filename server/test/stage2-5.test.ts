@@ -311,10 +311,10 @@ test('구독: 구매·갱신·복원·만료·환불이 각각 한 번씩만 반
   const in60 = new Date(Date.now() + 60 * 86400_000).toISOString();
   const first = await buy(u.token, 'eumtalk.premium.monthly', orig, `|${orig}|${in30}`);
   assert.equal(first.body.premium, true);
-  assert.equal(first.body.balance, 300);
+  assert.equal(first.body.balance, 3000);
   // 복원(같은 거래 재전송): 추가 지급 없음
   const restore = await buy(u.token, 'eumtalk.premium.monthly', orig, `|${orig}|${in30}`);
-  assert.equal(restore.body.balance, 300);
+  assert.equal(restore.body.balance, 3000);
   assert.equal(restore.body.premium, true);
   // 갱신 알림(새 거래 ID, 같은 원거래): 한 번만 지급되고 만료일이 늘어난다.
   const renewTx = `S${cid()}`;
@@ -322,7 +322,7 @@ test('구독: 구매·갱신·복원·만료·환불이 각각 한 번씩만 반
   await api('POST', '/v1/dev/store-event', null, ev);
   await api('POST', '/v1/dev/store-event', null, ev);
   let ov = (await api('GET', '/v1/points', u.token)).body;
-  assert.equal(ov.balance, 600);
+  assert.equal(ov.balance, 6000);
   assert.equal(ov.subscription.status, 'active');
   assert.ok(new Date(ov.subscription.expiresAt).getTime() > Date.now() + 50 * 86400_000);
   // 프리미엄은 다른 지역 둘러보기가 무료
@@ -331,7 +331,7 @@ test('구독: 구매·갱신·복원·만료·환불이 각각 한 번씩만 반
   await api('POST', '/v1/dev/store-event', null, { ...ev, token: `dev|${renewTx}|${orig}|${in60}|revoked` });
   await api('POST', '/v1/dev/store-event', null, { ...ev, token: `dev|${renewTx}|${orig}|${in60}|revoked` });
   ov = (await api('GET', '/v1/points', u.token)).body;
-  assert.equal(ov.balance, 300, '환불 회수도 한 번만');
+  assert.equal(ov.balance, 3000, '환불 회수도 한 번만');
   assert.equal(ov.subscription.status, 'refunded');
   // 만료
   const u2 = await signup(nick('만료자'));

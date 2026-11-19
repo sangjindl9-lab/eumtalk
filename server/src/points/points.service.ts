@@ -11,6 +11,7 @@ export interface Quote {
   cost: number;
   balance: number;
   enough: boolean;
+  vipDiscountPercent?: number;
 }
 
 /**
@@ -64,10 +65,21 @@ export class PointsService {
     const p = await this.price(q, key);
     const used = (await q.one<{ used: number }>(`SELECT used FROM feature_usage WHERE user_id = $1 AND key = $2 AND day = (now() AT TIME ZONE 'Asia/Seoul')::date`, [userId, key]))?.used ?? 0;
     let freeUnits = Math.min(units, Math.max(0, p.free_per_day - used));
-    if (opts.freeForPremium && (await this.isPremium(q, userId))) freeUnits = units;
-    const cost = (units - freeUnits) * p.points;
+    const premium = await this.isPremium(q, userId);
+    if (opts.freeForPremium && premium) freeUnits = units;
+    // VIP 할인: 유료 기능 포인트를 일정 비율 깎아 준다(관리자 마케팅 설정).
+    let unitPrice = p.points;
+    let vipDiscountPercent = 0;
+    if (premium && unitPrice > 0) {
+      const d = (await q.one<{ d: number }>(`SELECT coalesce((value->>'vipDiscountPercent')::int, 0) AS d FROM growth_settings WHERE id`))?.d ?? 0;
+      if (d > 0) {
+        vipDiscountPercent = d;
+        unitPrice = Math.max(0, Math.ceil((p.points * (100 - d)) / 100));
+      }
+    }
+    const cost = (units - freeUnits) * unitPrice;
     const balance = await this.balance(q, userId);
-    return { key, label: p.label, units, unitPrice: p.points, freeUnits, cost, balance, enough: balance >= cost };
+    return { key, label: p.label, units, unitPrice, freeUnits, cost, balance, enough: balance >= cost, vipDiscountPercent };
   }
 
   /** 유료 기능 사용분 차감. 반드시 기능 실행과 같은 트랜잭션에서 호출한다(실패하면 함께 되돌려진다). */

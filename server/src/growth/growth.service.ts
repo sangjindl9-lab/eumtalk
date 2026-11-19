@@ -16,6 +16,13 @@ export interface GrowthSettings {
   attendancePoints: number;
   streakDays: number;
   streakBonus: number;
+  vipDiscountPercent: number;
+  giftMin: number;
+  giftMax: number;
+  giftDailyMax: number;
+  recommendEnabled: boolean;
+  recommendCount: number;
+  recommendHour: number;
 }
 
 export const GROWTH_DEFAULTS: GrowthSettings = {
@@ -28,6 +35,13 @@ export const GROWTH_DEFAULTS: GrowthSettings = {
   attendancePoints: 5,
   streakDays: 7,
   streakBonus: 30,
+  vipDiscountPercent: 30,
+  giftMin: 10,
+  giftMax: 1000,
+  giftDailyMax: 3000,
+  recommendEnabled: true,
+  recommendCount: 3,
+  recommendHour: 12,
 };
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -64,7 +78,7 @@ export class GrowthService {
   async updateSettings(patch: any): Promise<GrowthSettings> {
     const cur = await this.settings();
     const next: any = { ...cur };
-    for (const k of ['inviteEnabled', 'attendanceEnabled'] as const) if (typeof patch?.[k] === 'boolean') next[k] = patch[k];
+    for (const k of ['inviteEnabled', 'attendanceEnabled', 'recommendEnabled'] as const) if (typeof patch?.[k] === 'boolean') next[k] = patch[k];
     const ints: [keyof GrowthSettings, number, number][] = [
       ['inviteeReward', 0, 10000],
       ['inviterReward', 0, 10000],
@@ -73,6 +87,12 @@ export class GrowthService {
       ['attendancePoints', 0, 1000],
       ['streakDays', 2, 60],
       ['streakBonus', 0, 10000],
+      ['vipDiscountPercent', 0, 100],
+      ['giftMin', 1, 100000],
+      ['giftMax', 1, 100000],
+      ['giftDailyMax', 1, 1000000],
+      ['recommendCount', 1, 10],
+      ['recommendHour', 7, 21],
     ];
     for (const [k, min, max] of ints) {
       if (patch?.[k] === undefined) continue;
@@ -80,6 +100,7 @@ export class GrowthService {
       if (!Number.isInteger(n) || n < min || n > max) throw bad('INVALID_INPUT', `${k} 값은 ${min}~${max} 사이 정수여야 합니다.`);
       next[k] = n;
     }
+    if (next.giftMin > next.giftMax) throw bad('INVALID_INPUT', '선물 최소 포인트가 최대보다 클 수 없습니다.');
     await this.db.query('INSERT INTO growth_settings (id, value) VALUES (true, $1) ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value', [JSON.stringify(next)]);
     return next;
   }

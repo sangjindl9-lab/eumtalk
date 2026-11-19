@@ -3,16 +3,16 @@ import { AppConfig, CONFIG } from '../config';
 import { googleAccessToken } from '../common/google-auth';
 import { Db } from '../db/db';
 
-export const NOTIFY_DEFAULTS = { all: true, direct: true, greeting: true, room: true, comment: true, notice: true, quiet: false, quietStart: '23:00', quietEnd: '08:00' };
+export const NOTIFY_DEFAULTS = { all: true, direct: true, greeting: true, room: true, comment: true, notice: true, recommend: true, marketing: false, quiet: false, quietStart: '23:00', quietEnd: '08:00' };
 export type NotifyPrefs = typeof NOTIFY_DEFAULTS;
-const KIND_PREF: Record<string, keyof NotifyPrefs> = { message: 'direct', room: 'room', greeting: 'greeting', comment: 'comment', notice: 'notice' };
+const KIND_PREF: Record<string, keyof NotifyPrefs> = { message: 'direct', room: 'room', greeting: 'greeting', comment: 'comment', notice: 'notice', recommend: 'recommend', marketing: 'marketing' };
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** 회원이 보낸 알림 설정 일부를 검사해 기존 값에 합친다. */
 export function mergeNotify(current: Partial<NotifyPrefs> | null | undefined, patch: any): NotifyPrefs {
   const out: NotifyPrefs = { ...NOTIFY_DEFAULTS, ...(current || {}) };
   if (!patch || typeof patch !== 'object') return out;
-  for (const k of ['all', 'direct', 'greeting', 'room', 'comment', 'notice', 'quiet'] as const) {
+  for (const k of ['all', 'direct', 'greeting', 'room', 'comment', 'notice', 'recommend', 'marketing', 'quiet'] as const) {
     if (typeof patch[k] === 'boolean') (out as any)[k] = patch[k];
   }
   for (const k of ['quietStart', 'quietEnd'] as const) {
@@ -35,7 +35,7 @@ export function inQuietHours(p: NotifyPrefs, now = new Date()): boolean {
 
 export interface PushItem {
   userId: string;
-  kind: 'message' | 'greeting' | 'notice' | 'room' | 'comment';
+  kind: 'message' | 'greeting' | 'notice' | 'room' | 'comment' | 'recommend' | 'marketing';
   title: string;
   body: string;
   /** 미리보기를 끈 회원에게 대신 보여줄 문구 */

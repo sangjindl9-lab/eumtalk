@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../core/api.dart';
 import '../core/models.dart';
+import 'monetize.dart' show BoostTag, TodayPicksStrip, VipBadge, showBoostSheet;
 import 'profile_page.dart';
 import 'widgets.dart';
 
@@ -525,6 +526,13 @@ class _NearbyTabState extends State<NearbyTab> {
       appBar: AppBar(
         title: const Text('주변'),
         actions: [
+          IconButton(
+            onPressed: () async {
+              if (await showBoostSheet(context)) _load();
+            },
+            icon: const Icon(Icons.rocket_launch_outlined),
+            tooltip: '내 프로필 띄우기',
+          ),
           IconButton(onPressed: _multiGreet, icon: const Icon(Icons.campaign_outlined), tooltip: '여러 명에게 인사'),
           Badge(
             isLabelVisible: filterCount > 0,
@@ -560,6 +568,7 @@ class _NearbyTabState extends State<NearbyTab> {
               ),
             ),
             if (banner != null) Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 10), child: banner),
+            const TodayPicksStrip(),
             Expanded(child: content),
           ],
         ),
@@ -581,6 +590,7 @@ class _PersonCard extends StatelessWidget {
     final place = [p.proximityLabel, if (p.proximity != 'far' && p.proximity != 'same_region') p.regionName].join(' · ');
     return Card(
       clipBehavior: Clip.antiAlias,
+      shape: p.boosted ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: t.colorScheme.primary, width: 1.5)) : null,
       child: InkWell(
         onTap: () async {
           await Navigator.of(context).push(
@@ -606,7 +616,9 @@ class _PersonCard extends StatelessWidget {
                       spacing: 8,
                       children: [
                         Text(p.nickname, style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                        if (p.vip) const VipBadge(),
                         Text(meta, style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                        if (p.boosted) const BoostTag(),
                       ],
                     ),
                     const SizedBox(height: 2),

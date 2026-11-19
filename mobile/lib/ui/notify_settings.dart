@@ -46,6 +46,14 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     }
   }
 
+  Future<void> _marketing(bool v) async {
+    await _patch({'marketing': v});
+    if (!mounted) return;
+    final now = DateTime.now();
+    final day = '${now.year}년 ${now.month}월 ${now.day}일';
+    showMessage(context, v ? '$day 이음톡 광고성 정보 수신에 동의했어요.' : '$day 이음톡 광고성 정보 수신을 거부했어요.');
+  }
+
   Future<void> _preview(bool v) async {
     try {
       await AppScope.read(context).updateMe({
@@ -119,6 +127,17 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             kind('room', '모임방 메시지', '참여한 모임방의 새 메시지', n.room),
             kind('comment', '내 글의 댓글', '동네 게시판·장터에 쓴 글에 댓글이 달렸을 때', n.comment),
             kind('notice', '운영 알림', '신고 처리 결과, 문의 답변, 이용 조치 안내', n.notice),
+            kind('recommend', '오늘의 추천 친구', '매일 우리 동네 추천 친구가 도착하면', n.recommend),
+            SwitchListTile(
+              title: const Text('이벤트·혜택 알림 (광고성 정보 수신 동의)'),
+              subtitle: Text(
+                n.marketing && me.marketingConsentAt != null
+                    ? '${me.marketingConsentAt!.substring(0, 10)}에 수신 동의 · 포인트 이벤트, 할인 쿠폰 소식'
+                    : '포인트 이벤트, 할인 쿠폰 소식을 알림으로 받아요. 오후 9시~오전 8시에는 보내지 않아요.',
+              ),
+              value: n.all && n.marketing,
+              onChanged: n.all && !_busy ? (v) => _marketing(v) : null,
+            ),
             const Divider(),
             _Header('방해 금지 시간'),
             SwitchListTile(

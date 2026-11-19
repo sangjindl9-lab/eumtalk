@@ -183,10 +183,10 @@ class _PointsPageState extends State<PointsPage> {
                           const SizedBox(height: 8),
                           Text(
                             sub['status'] == 'active'
-                                ? '프리미엄 이용 중 · ${shortTime(DateTime.parse(sub['expiresAt'] as String).toLocal())}${sub['autoRenew'] == true ? ' 갱신 예정' : '까지'}'
+                                ? 'VIP 이용 중 · ${shortTime(DateTime.parse(sub['expiresAt'] as String).toLocal())}${sub['autoRenew'] == true ? ' 갱신 예정' : '까지'}'
                                 : sub['status'] == 'refunded'
-                                ? '프리미엄 환불됨'
-                                : '프리미엄 만료됨',
+                                ? 'VIP 환불됨'
+                                : 'VIP 만료됨',
                             style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.primary),
                           ),
                         ],
@@ -195,7 +195,7 @@ class _PointsPageState extends State<PointsPage> {
                   ),
                 ),
               ),
-              header('충전·프리미엄'),
+              header('충전·VIP'),
               if (_storeChecked && !_storeAvailable)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
@@ -205,7 +205,7 @@ class _PointsPageState extends State<PointsPage> {
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                   title: Text(_store[p['id']]?.title.isNotEmpty == true ? _store[p['id']]!.title : p['title'] as String),
-                  subtitle: Text(p['kind'] == 'subscription' ? '갱신 때마다 ${comma(p['points'] as num)}P · 다른 지역 둘러보기 무료' : '${comma(p['points'] as num)}P 지급'),
+                  subtitle: Text(p['kind'] == 'subscription' ? '매달 ${comma(p['points'] as num)}P 지급 · 유료 기능 할인 · VIP 배지 · 나를 본 사람·다른 지역 둘러보기 무료' : '${comma(p['points'] as num)}P 지급'),
                   trailing: FilledButton.tonal(
                     onPressed: _buying != null || _store[p['id']] == null ? null : () => _buy(p),
                     child: _buying == p['id']
