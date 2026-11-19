@@ -193,7 +193,7 @@ export class LawService {
       }
       const r = await q.one<any>(
         `INSERT INTO law_requests (agency, officer, officer_contact, doc_number, basis, received_at, due_at, period_from, period_to, scope, counterpart_ids, note, created_by)
-         VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, current_date), $7::date, $8, $9, $10, $11, $12, $13) RETURNING *`,
+         VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, (now() AT TIME ZONE 'Asia/Seoul')::date), $7::date, $8, $9, $10, $11, $12, $13) RETURNING *`,
         [
           agency,
           String(body?.officer || '').slice(0, 100),
@@ -406,6 +406,27 @@ export class LawService {
       subjects.push(s);
     }
 
+    // 대화 상대 회원 ID 를 닉네임(이력 포함)으로 풀어 준다. 대화 상대·내용을 제공하는 범위에서만.
+    let relatedUsers: any[] | undefined;
+    if (scope.includes('comm_meta') || scope.includes('messages')) {
+      const ids = new Set<string>();
+      for (const s of subjects) {
+        for (const c of s.conversations ?? []) for (const o of c.otherUserIds ?? []) ids.add(o);
+        for (const g of s.greetings ?? []) ids.add(g.counterpartUserId);
+        for (const m of s.messages ?? []) ids.add(m.senderUserId);
+      }
+      for (const t of targetIds) ids.delete(t);
+      relatedUsers = ids.size
+        ? (
+            await this.db.query<any>(
+              `SELECT u.id, u.status, (SELECT array_agg(h.nickname ORDER BY h.started_at) FROM nickname_history h WHERE h.user_id = u.id) AS nicknames
+                 FROM users u WHERE u.id = ANY($1::uuid[])`,
+              [[...ids]],
+            )
+          ).map((u) => ({ userId: u.id, status: u.status, nicknames: u.nicknames ?? [] }))
+        : [];
+    }
+
     const op = this.cfg.brand.operator || ({} as any);
     const content = {
       format: 'eumtalk-law-export/1',
@@ -429,6 +450,7 @@ export class LawService {
       generatedBy: a.name || a.email,
       timeZoneNote: '모든 시각은 UTC(협정 세계시) 기준 ISO 8601 형식입니다. 한국 시각은 9시간을 더합니다.',
       subjects,
+      relatedUsers,
     };
     const text = canonical(content);
     const sha = createHash('sha256').update(text, 'utf8').digest('hex');
@@ -588,11 +610,11 @@ export class LawService {
         parts.push(
           table(['항목', '내용'], [
             ['회원 ID', x.userId],
-            ['상태', x.status],
+            ['상태', ({ active: '이용 중', suspended: '이용 정지', deleted: '탈퇴' } as Record<string, string>)[x.status] ?? x.status],
             ['가입 일시', kst(x.signupAt)],
             ['탈퇴 일시', kst(x.deletedAt)],
             ['현재 닉네임', x.nickname],
-            ['가입 방식', x.signupMethod],
+            ['가입 방식', x.signupMethod === 'dev' ? '시험용 인증' : x.signupMethod],
             ['휴대폰 번호', x.phone ?? '수집하지 않음'],
             ['출생 연도(자기 신고)', x.birthYear],
             ['연령대', x.ageBand],
@@ -669,6 +691,7 @@ table{border-collapse:collapse;width:100%;margin:4px 0 10px}th,td{border:1px sol
     ])}
 <p class="muted">이 문서는 함께 제공하는 JSON 원본 파일을 사람이 읽기 쉽게 옮긴 것입니다. 원본의 동일성은 JSON 파일의 SHA-256 값으로 확인합니다. 시각은 한국 시각(KST)으로 표시했습니다.</p></div>
 ${parts.join('\n')}
+${c.relatedUsers ? `<h2>관련 회원(대화 상대)</h2>${table(['회원 ID', '닉네임(이력 순)', '상태'], c.relatedUsers.map((u: any) => [u.userId, (u.nicknames ?? []).join(' → '), ({ active: '이용 중', suspended: '이용 정지', deleted: '탈퇴' } as Record<string, string>)[u.status] ?? u.status]))}` : ''}
 <p class="muted" style="margin-top:32px">— 끝 —</p></body></html>`;
   }
 
