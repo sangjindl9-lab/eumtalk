@@ -30,6 +30,8 @@ import { RoomsService } from './rooms/rooms.service';
 import { SafetyController } from './safety/safety.controller';
 import { SafetyService } from './safety/safety.service';
 import { SystemController } from './system/system.controller';
+import { LawController } from './law/law.controller';
+import { LawService } from './law/law.service';
 
 @Module({})
 export class AppModule {
@@ -38,7 +40,7 @@ export class AppModule {
       module: AppModule,
       controllers: [
         SystemController, AuthController, ProfileController, GreetingsController, ChatController, SafetyController,
-        MediaController, RoomsController, PostsController, PointsController, AccountController, AdminController, PublicController,
+        MediaController, RoomsController, PostsController, PointsController, AccountController, AdminController, PublicController, LawController,
       ],
       providers: [
         { provide: CONFIG, useValue: cfg },
@@ -60,6 +62,7 @@ export class AppModule {
         PostsService,
         AccountService,
         AdminService,
+        LawService,
       ],
     };
   }

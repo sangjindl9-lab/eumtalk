@@ -26,6 +26,7 @@ const SECTIONS: { id: string; label: string; roles: string[] }[] = [
   { id: 'prices', label: '가격 설정', roles: ['finance'] },
   { id: 'announcements', label: '운영 공지', roles: ['support'] },
   { id: 'inquiries', label: '문의', roles: ['support'] },
+  { id: 'law', label: '수사기관 요청', roles: [] },
   { id: 'admins', label: '관리자 계정', roles: [] },
   { id: 'audit', label: '열람·조치 기록', roles: [] },
 ];
@@ -166,6 +167,7 @@ export default function AdminApp({ apiBase }: { apiBase: string }) {
         {current.id === 'prices' && <Prices call={call} />}
         {current.id === 'announcements' && <Announcements call={call} />}
         {current.id === 'inquiries' && <Inquiries call={call} />}
+        {current.id === 'law' && <LawRequests call={call} />}
         {current.id === 'admins' && <Admins call={call} />}
         {current.id === 'audit' && <Audit call={call} />}
       </main>
@@ -835,6 +837,331 @@ function Admins({ call }: { call: Call }) {
         ]}
       />
     </Page>
+  );
+}
+
+// ── 수사기관 요청 ───────────────────────────────────────────────────────
+
+const LAW_SCOPE_LABEL: Record<string, string> = { account: '가입·회원 정보', access: '접속 기록', comm_meta: '대화 상대·일시', messages: '대화 내용', posts: '게시글·댓글', reports: '신고·조치 이력', payments: '결제·포인트' };
+const LAW_STATUS_CLASS: Record<string, string> = { received: '', approved: '', exported: '', delivered: 'ok', closed: 'muted', rejected: 'bad' };
+
+function saveFile(filename: string, mime: string, content: string) {
+  const url = URL.createObjectURL(new Blob([content], { type: `${mime};charset=utf-8` }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function LawRequests({ call }: { call: Call }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const { data, error, reload } = useLoad(() => call('GET', '/law/requests'), []);
+  if (open) return <LawRequestDetail call={call} id={open} back={() => (setOpen(null), reload())} />;
+  if (creating) return <LawRequestForm call={call} done={(id) => (setCreating(false), id ? setOpen(id) : reload())} />;
+  return (
+    <Page
+      title="수사기관 요청"
+      sub="경찰 등 수사기관의 자료 요청을 접수하고, 법적 근거에 맞는 범위만 자료로 만들어 제공합니다. 모든 단계가 열람·조치 기록에 남습니다."
+      error={error}
+      actions={<button className="primary" onClick={() => setCreating(true)}>요청 접수</button>}
+    >
+      <Table
+        empty="접수된 요청이 없습니다"
+        rows={data?.items}
+        cols={[
+          ['접수일', (r) => r.receivedAt, 'nowrap'],
+          ['요청 기관', (r) => <button className="link" onClick={() => setOpen(r.id)}>{r.agency}</button>],
+          ['문서 번호', (r) => r.docNumber || '-'],
+          ['근거', (r) => r.basisLabel],
+          ['대상', (r) => `${r.targets}명`, 'num'],
+          ['회신 기한', (r) => r.dueAt || '-', 'nowrap'],
+          ['상태', (r) => <span className={LAW_STATUS_CLASS[r.status]}>{r.statusLabel}</span>],
+        ]}
+      />
+    </Page>
+  );
+}
+
+function LawRequestForm({ call, done }: { call: Call; done: (id?: string) => void }) {
+  const { data: meta } = useLoad(() => call('GET', '/law/meta'), []);
+  const [basis, setBasis] = useState('warrant');
+  const [scope, setScope] = useState<string[]>([]);
+  const [targets, setTargets] = useState<Row[]>([]);
+  const [counterparts, setCounterparts] = useState<Row[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const allowed: string[] = meta?.bases.find((b: Row) => b.id === basis)?.scopes ?? [];
+  useEffect(() => setScope((s) => s.filter((x) => allowed.includes(x))), [basis, meta]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    setError(null);
+    try {
+      const r = await call('POST', '/law/requests', {
+        agency: f.get('agency'),
+        officer: f.get('officer'),
+        officerContact: f.get('officerContact'),
+        docNumber: f.get('docNumber'),
+        basis,
+        receivedAt: f.get('receivedAt') || undefined,
+        dueAt: f.get('dueAt') || undefined,
+        periodFrom: f.get('periodFrom') ? new Date(String(f.get('periodFrom'))).toISOString() : undefined,
+        periodTo: f.get('periodTo') ? new Date(String(f.get('periodTo'))).toISOString() : undefined,
+        scope,
+        userIds: targets.map((t) => t.id),
+        counterpartIds: counterparts.map((t) => t.id),
+        note: f.get('note'),
+        hold: f.get('hold') === 'on',
+      });
+      done(r.id);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  return (
+    <Page title="수사기관 요청 접수" sub="공문·영장 원본을 받은 뒤 그 내용 그대로 적어 주세요" error={error} actions={<button onClick={() => done()}>취소</button>}>
+      <form className="panel" onSubmit={submit} style={{ display: 'grid', gap: 12 }}>
+        <div className="grid2">
+          <div>
+            <label>요청 기관 *</label>
+            <input name="agency" required placeholder="예: 원주경찰서 사이버수사팀" />
+          </div>
+          <div>
+            <label>공문·영장 번호</label>
+            <input name="docNumber" placeholder="예: 2026-압-1234" />
+          </div>
+          <div>
+            <label>담당 수사관</label>
+            <input name="officer" />
+          </div>
+          <div>
+            <label>수사관 연락처</label>
+            <input name="officerContact" placeholder="전화·공무 이메일" />
+          </div>
+          <div>
+            <label>접수일</label>
+            <input name="receivedAt" type="date" />
+          </div>
+          <div>
+            <label>회신 기한</label>
+            <input name="dueAt" type="date" />
+          </div>
+        </div>
+        <div>
+          <label>법적 근거 *</label>
+          <select value={basis} onChange={(e) => setBasis(e.target.value)} aria-label="법적 근거">
+            {meta?.bases.map((b: Row) => (
+              <option key={b.id} value={b.id}>
+                {b.label}
+              </option>
+            ))}
+          </select>
+          <p className="muted" style={{ marginTop: 4 }}>
+            대화 내용은 영장(또는 긴급 요청)일 때만 제공할 수 있습니다. 통신자료 요청은 가입 정보만, 통신사실확인자료 요청은 접속 기록과 대화 상대·일시만 제공합니다.
+          </p>
+        </div>
+        {allowed.length > 0 && (
+          <div>
+            <label>제공 범위 *</label>
+            <div className="checks">
+              {meta?.scopes
+                .filter((s: Row) => allowed.includes(s.id))
+                .map((s: Row) => (
+                  <label key={s.id} className="check">
+                    <input type="checkbox" checked={scope.includes(s.id)} onChange={(e) => setScope((v) => (e.target.checked ? [...v, s.id] : v.filter((x) => x !== s.id)))} /> {s.label}
+                  </label>
+                ))}
+            </div>
+          </div>
+        )}
+        <div className="grid2">
+          <div>
+            <label>조회 기간 시작 (영장에 적힌 기간)</label>
+            <input name="periodFrom" type="datetime-local" />
+          </div>
+          <div>
+            <label>조회 기간 끝</label>
+            <input name="periodTo" type="datetime-local" />
+          </div>
+        </div>
+        <UserPicker call={call} label="대상 회원 *" value={targets} onChange={setTargets} />
+        {scope.some((s) => s === 'messages' || s === 'comm_meta') && (
+          <UserPicker call={call} label="대화 상대 한정 (영장이 특정 상대와의 대화만 요구할 때)" value={counterparts} onChange={setCounterparts} />
+        )}
+        <div>
+          <label>메모</label>
+          <textarea name="note" rows={3} placeholder="사건 개요, 요청 원문의 특이사항 등" />
+        </div>
+        <label className="check">
+          <input type="checkbox" name="hold" defaultChecked /> 대상 회원 자료를 바로 보존 조치 (탈퇴해도 사본을 남깁니다)
+        </label>
+        <div>
+          <button className="primary" type="submit" disabled={!targets.length || (basis !== 'preservation' && !scope.length)}>
+            접수
+          </button>
+        </div>
+      </form>
+    </Page>
+  );
+}
+
+function UserPicker({ call, label, value, onChange }: { call: Call; label: string; value: Row[]; onChange: (v: Row[]) => void }) {
+  const [q, setQ] = useState('');
+  const [items, setItems] = useState<Row[] | null>(null);
+  const search = async () => setItems((await call('GET', `/law/users?q=${encodeURIComponent(q)}`)).items);
+  const name = (u: Row) => (u.nickname ? u.nickname : `탈퇴 회원(${(u.nicknames ?? []).join(', ') || u.id.slice(0, 8)})`);
+  return (
+    <div>
+      <label>{label}</label>
+      <div className="inlineform">
+        <input placeholder="닉네임(과거 닉네임 포함) 또는 회원 ID" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), search())} />
+        <button type="button" onClick={search}>
+          찾기
+        </button>
+      </div>
+      {value.length > 0 && (
+        <p>
+          {value.map((u) => (
+            <span key={u.id} className="chip">
+              {name(u)} <button type="button" className="link" onClick={() => onChange(value.filter((x) => x.id !== u.id))}>빼기</button>
+            </span>
+          ))}
+        </p>
+      )}
+      {items && (
+        <ul className="picklist">
+          {items.length === 0 && <li className="muted">찾는 회원이 없습니다</li>}
+          {items.map((u) => (
+            <li key={u.id}>
+              <span>
+                {name(u)} <span className="muted">· 가입 {when(u.createdAt)}{u.deletedAt ? ` · 탈퇴 ${when(u.deletedAt)}` : ''}{u.nicknames?.length > 1 ? ` · 닉네임 이력 ${u.nicknames.join(', ')}` : ''}</span>
+              </span>
+              <button type="button" disabled={value.some((x) => x.id === u.id)} onClick={() => onChange([...value, u])}>
+                추가
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function LawRequestDetail({ call, id, back }: { call: Call; id: string; back: () => void }) {
+  const { data, error, reload } = useLoad(() => call('GET', `/law/requests/${id}`), [id]);
+  const act = useAction(reload);
+  const r: Row | undefined = data?.request;
+  const download = (exportId: string, format: 'html' | 'json') =>
+    act.run(async () => {
+      const f = await call('GET', `/law/requests/${id}/exports/${exportId}?format=${format}`);
+      saveFile(f.filename, f.mime, f.content);
+    });
+  const approve = () => {
+    if (window.confirm('공문·영장 원본, 요청 기관, 담당자 신원을 확인했습니까? 승인하면 자료를 만들 수 있습니다.')) act.run(() => call('POST', `/law/requests/${id}/approve`, { confirmed: true }));
+  };
+  const reject = () => {
+    const note = window.prompt('반려 사유 (예: 영장 없이 대화 내용 요청)');
+    if (note) act.run(() => call('POST', `/law/requests/${id}/reject`, { note }));
+  };
+  const delivered = () => {
+    const method = window.prompt('제공 방법 (예: 암호화 USB 직접 전달, 수사기관 전용 메일)');
+    if (method) act.run(() => call('POST', `/law/requests/${id}/delivered`, { method }));
+  };
+  const close = () => {
+    const releaseHolds = window.confirm('보존 조치도 함께 해제할까요? (확인 = 해제, 취소 = 유지)');
+    const note = window.prompt('종결 메모 (비워도 됩니다)') ?? '';
+    act.run(() => call('POST', `/law/requests/${id}/close`, { note, releaseHolds }));
+  };
+  return (
+    <Page title="수사기관 요청" sub={r ? `${r.agency} · ${r.basisLabel} · ${r.statusLabel}` : '불러오는 중'} error={error || act.error} actions={<button onClick={back}>목록으로</button>}>
+      {r && data && (
+        <>
+          <section className="panel">
+            <h2>요청 내용</h2>
+            <ul className="kv">
+              <li><span className="secondary">요청 기관</span>{r.agency}</li>
+              <li><span className="secondary">담당자</span>{[r.officer, r.officerContact].filter(Boolean).join(' · ') || '-'}</li>
+              <li><span className="secondary">공문·영장 번호</span>{r.docNumber || '-'}</li>
+              <li><span className="secondary">법적 근거</span>{r.basisLabel}</li>
+              <li><span className="secondary">제공 범위</span>{r.scope.length ? r.scope.map((s: string) => LAW_SCOPE_LABEL[s] ?? s).join(', ') : '없음(보존만)'}</li>
+              <li><span className="secondary">조회 기간</span>{r.periodFrom ? when(r.periodFrom) : '처음부터'} ~ {r.periodTo ? when(r.periodTo) : '현재까지'}</li>
+              <li><span className="secondary">접수일 / 회신 기한</span>{r.receivedAt} / {r.dueAt || '-'}</li>
+              {r.note && <li><span className="secondary">메모</span>{r.note}</li>}
+              {r.deliveredAt && <li><span className="secondary">제공</span>{when(r.deliveredAt)} · {r.deliveryMethod}</li>}
+              {r.closeNote && <li><span className="secondary">종결 메모</span>{r.closeNote}</li>}
+            </ul>
+            <div className="actions" style={{ marginTop: 12 }}>
+              {r.status === 'received' && r.basis !== 'preservation' && <button className="primary" onClick={approve}>근거 확인 후 승인</button>}
+              {['approved', 'exported'].includes(r.status) && <button className="primary" onClick={() => act.run(() => call('POST', `/law/requests/${id}/exports`))}>제공 자료 만들기</button>}
+              {r.status === 'exported' && <button onClick={delivered}>제공 완료 기록</button>}
+              {['received', 'approved'].includes(r.status) && <button onClick={reject}>반려</button>}
+              {!['closed', 'rejected'].includes(r.status) && <button onClick={close}>종결</button>}
+            </div>
+          </section>
+          <section className="panel">
+            <h2>대상 회원과 보존 조치</h2>
+            <Table
+              empty=""
+              rows={data.targets}
+              cols={[
+                ['회원', (t) => t.nickname ?? `탈퇴 회원`],
+                ['닉네임 이력', (t) => (t.nicknames ?? []).join(', ')],
+                ['회원 ID', (t) => <span className="mono">{t.id}</span>],
+                ['상태', (t) => (t.status === 'deleted' ? `탈퇴 ${when(t.deletedAt)}` : t.status === 'suspended' ? '정지' : '이용 중')],
+                ['보존', (t) => (t.onHold ? <span className="ok">보존 중</span> : '-')],
+                ['', (t) => !['closed', 'rejected'].includes(r.status) && <button onClick={() => act.run(() => call('POST', `/law/requests/${id}/hold`, { userId: t.id, on: !t.onHold }))}>{t.onHold ? '보존 해제' : '보존 조치'}</button>, 'right'],
+              ]}
+            />
+          </section>
+          <section className="panel">
+            <h2>제공 자료</h2>
+            <p className="muted">HTML은 출력·PDF 저장용 보고서이고, JSON은 원본입니다. 둘 다 같은 SHA-256 값을 적어 제공하면 받은 쪽에서 원본 동일성을 확인할 수 있습니다. 대화 사진은 보고서의 사진 ID로 아래에서 확인합니다.</p>
+            <Table
+              empty="아직 만든 자료가 없습니다"
+              rows={data.exports}
+              cols={[
+                ['생성', (e) => when(e.createdAt), 'nowrap'],
+                ['생성자', (e) => e.by ?? '-'],
+                ['SHA-256', (e) => <span className="mono">{e.sha256}</span>],
+                ['크기', (e) => `${num.format(Math.ceil(e.byteSize / 1024))}KB`, 'num'],
+                ['', (e) => (<><button onClick={() => download(e.id, 'html')}>보고서(HTML)</button> <button onClick={() => download(e.id, 'json')}>원본(JSON)</button></>), 'right'],
+              ]}
+            />
+            {r.scope.includes('messages') && <LawPhoto call={call} requestId={id} />}
+          </section>
+        </>
+      )}
+    </Page>
+  );
+}
+
+function LawPhoto({ call, requestId }: { call: Call; requestId: string }) {
+  const [mediaId, setMediaId] = useState('');
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const open = async () => {
+    setError(null);
+    try {
+      setUrl((await call('GET', `/law/requests/${requestId}/media/${mediaId.trim()}`)).url);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div className="inlineform">
+        <input placeholder="보고서의 사진 ID" value={mediaId} onChange={(e) => setMediaId(e.target.value)} />
+        <button type="button" onClick={open}>사진 보기(5분 링크)</button>
+      </div>
+      {error && <p className="bad">{error}</p>}
+      {url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <p><a href={url} target="_blank" rel="noreferrer">원본 사진 열기 · 내려받기</a></p>
+      )}
+    </div>
   );
 }
 

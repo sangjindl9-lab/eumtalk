@@ -115,7 +115,23 @@ export class AccountService {
       if (left.length) await q.query('UPDATE rooms SET member_count = GREATEST(member_count - 1, 0) WHERE conversation_id = ANY($1::uuid[])', [left.map((l: any) => l.conversation_id)]);
       d.rooms = { transferred, closed, left: left.length };
 
-      d.photosDeleted = await this.media.removeAllOf(q, userId, ['profile', 'post', 'room']);
+      // 보존 조치 중이면 탈퇴 직전 회원 정보 사본을 남기고 사진 원본도 지우지 않는다.
+      const holds = await q.query<{ id: string }>('SELECT id FROM law_holds WHERE user_id = $1 AND released_at IS NULL', [userId]);
+      if (holds.length) {
+        const snap = await q.one<any>(
+          `SELECT u.created_at, p.nickname, p.age_band, p.gender, p.bio, r.name AS region, up.birth_year, up.identity_provider,
+                  (SELECT json_agg(json_build_object('id', m.id, 'purpose', m.purpose, 'createdAt', m.created_at)) FROM media m WHERE m.owner_id = u.id AND m.status <> 'deleted') AS media
+             FROM users u LEFT JOIN profiles p ON p.user_id = u.id LEFT JOIN regions r ON r.id = p.region_id LEFT JOIN user_private up ON up.user_id = u.id
+            WHERE u.id = $1`,
+          [userId],
+        );
+        await q.query(`UPDATE law_holds SET snapshot = $2 WHERE user_id = $1 AND released_at IS NULL`, [userId, JSON.stringify({ ...snap, deletedAt: new Date().toISOString(), reason })]);
+        await q.query(`UPDATE media SET status = 'held' WHERE owner_id = $1 AND purpose = ANY($2::text[]) AND status <> 'deleted'`, [userId, ['profile', 'post', 'room']]);
+        d.photosDeleted = 0;
+        d.legalHold = true;
+      } else {
+        d.photosDeleted = await this.media.removeAllOf(q, userId, ['profile', 'post', 'room']);
+      }
       d.postsHidden = (await q.query(`UPDATE posts SET status = 'deleted', pinned_until = NULL WHERE author_id = $1 AND status <> 'deleted' RETURNING 1`, [userId])).length;
       d.commentsHidden = (await q.query(`UPDATE post_comments SET status = 'deleted' WHERE author_id = $1 AND status <> 'deleted' RETURNING 1`, [userId])).length;
       await q.query(`UPDATE greeting_requests SET status = 'cancelled', responded_at = now() WHERE status = 'pending' AND (sender_id = $1 OR receiver_id = $1)`, [userId]);
@@ -136,6 +152,7 @@ export class AccountService {
       );
       await q.query('UPDATE user_private SET phone_enc = NULL, birth_year = NULL, identity_ref_hash = NULL WHERE user_id = $1', [userId]);
       await q.query(`UPDATE users SET status = 'deleted', phone_hash = NULL, deleted_at = now(), suspended_until = NULL WHERE id = $1`, [userId]);
+      await q.query('UPDATE nickname_history SET ended_at = now() WHERE user_id = $1 AND ended_at IS NULL', [userId]);
       d.retained = ['신고·조치 기록', '포인트 원장', '구매·구독 기록', '상대방 대화방에 남은 메시지'];
       await q.query('INSERT INTO account_deletions (user_id, reason, detail) VALUES ($1, $2, $3)', [userId, reason.slice(0, 300), JSON.stringify(d)]);
       return d;

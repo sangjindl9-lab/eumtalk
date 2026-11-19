@@ -32,6 +32,7 @@ const PERMISSIONS: Record<string, AdminRole[]> = {
   support: ['support'],
   admins: [],
   audit: [],
+  legal: [], // 수사기관 자료 제공: 소유자만
 };
 
 const hashPassword = (pw: string) => {

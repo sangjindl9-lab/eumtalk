@@ -230,6 +230,7 @@ export class AuthService {
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [user.id, nickname, ageBand(v.birth_year), gender, genderPublic, regionId, bio, Math.floor(Math.random() * 8)],
       );
+      await q.query('INSERT INTO nickname_history (user_id, nickname) VALUES ($1, $2)', [user.id, nickname]);
       if (interestIds.length) {
         await q.query(
           `INSERT INTO profile_interests (user_id, interest_id)

@@ -101,6 +101,15 @@ export class ProfileController {
     if (optBool(s.pushPreview) !== undefined) set('push_preview', s.pushPreview);
 
     await this.db.tx(async (q) => {
+      if (body?.nickname !== undefined) {
+        const cur = await q.one<{ nickname: string }>('SELECT nickname FROM profiles WHERE user_id = $1', [userId]);
+        const n = String(body.nickname).trim();
+        if (cur && cur.nickname !== n) {
+          // 닉네임 이력: 수사기관 요청 시 사건 당시 닉네임으로 회원을 찾을 수 있게 남긴다.
+          await q.query('UPDATE nickname_history SET ended_at = now() WHERE user_id = $1 AND ended_at IS NULL', [userId]);
+          await q.query('INSERT INTO nickname_history (user_id, nickname) VALUES ($1, $2)', [userId, n]);
+        }
+      }
       if (sets.length) await q.query(`UPDATE profiles SET ${sets.join(', ')}, updated_at = now() WHERE user_id = $1`, params);
       if (Array.isArray(body?.interestIds)) {
         const ids = [...new Set<string>(body.interestIds.map(String))].slice(0, 10);

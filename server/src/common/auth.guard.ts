@@ -4,6 +4,7 @@ import { AppError } from './errors';
 import { Db } from '../db/db';
 
 const lastTouch = new Map<string, number>();
+const lastAccess = new Map<string, number>();
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -37,6 +38,25 @@ export class AuthGuard implements CanActivate {
     }
     req.userId = row.user_id;
     req.sessionId = row.id;
+
+    // 접속 기록(통신사실확인자료): 같은 세션·같은 IP 는 10분에 한 번만 남긴다. 90일 뒤 자동 삭제된다.
+    const ip = String(req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+    const accessKey = `${row.id}|${ip}`;
+    const nowMs = Date.now();
+    if ((lastAccess.get(accessKey) || 0) < nowMs - 600_000) {
+      lastAccess.set(accessKey, nowMs);
+      if (lastAccess.size > 200000) lastAccess.clear();
+      const platform = ['android', 'ios', 'web'].includes(String(req.headers['x-platform'])) ? String(req.headers['x-platform']) : null;
+      this.db
+        .query('INSERT INTO access_logs (user_id, session_id, ip, user_agent, platform) VALUES ($1, $2, $3, $4, $5)', [
+          row.user_id,
+          row.id,
+          ip || 'unknown',
+          String(req.headers['user-agent'] || '').slice(0, 300),
+          platform,
+        ])
+        .catch(() => undefined);
+    }
 
     // 최근 활동 시각은 1분에 한 번만 갱신한다.
     const now = Date.now();
