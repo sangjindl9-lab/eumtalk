@@ -19,7 +19,7 @@ class ProfileFormData {
   String nickname = '';
   String bio = '';
   String? gender;
-  bool genderPublic = false;
+  bool genderPublic = true;
   String? regionId;
   String? regionName;
   Set<String> interestIds = {};
@@ -30,13 +30,14 @@ class ProfileFormData {
       return '닉네임은 한글·영문·숫자·밑줄 2~12자로 입력해 주세요.';
     }
     if (regionId == null) return '활동 지역을 선택해 주세요.';
+    if (gender != 'male' && gender != 'female') return '성별(남자·여자)을 선택해 주세요.';
     return null;
   }
 
   Map<String, dynamic> toJson() => {
     'nickname': nickname.trim(),
     'bio': bio.trim(),
-    'gender': gender,
+    if (gender == 'male' || gender == 'female') 'gender': gender,
     'genderPublic': genderPublic,
     'regionId': regionId,
     'interestIds': interestIds.toList(),
@@ -109,32 +110,26 @@ class _ProfileFormState extends State<ProfileForm> {
           icon: const Icon(Icons.place_outlined),
           label: Text(d.regionName ?? '시·군·구 선택'),
         ),
-        label('성별', '선택 입력'),
-        Wrap(
-          spacing: 8,
+        label('성별', '필수 · 다른 회원에게 표시돼요'),
+        Row(
           children: [
-            for (final e in const {'male': '남성', 'female': '여성', 'other': '기타'}.entries)
-              ChoiceChip(
-                label: Text(e.value),
-                selected: d.gender == e.key,
-                onSelected: (on) {
-                  d.gender = on ? e.key : null;
-                  if (!on) d.genderPublic = false;
-                  widget.onChanged();
-                },
+            for (final e in const {'female': '여자', 'male': '남자'}.entries) ...[
+              Expanded(
+                child: ChoiceChip(
+                  label: SizedBox(width: double.infinity, child: Text(e.value, textAlign: TextAlign.center)),
+                  avatar: Icon(e.key == 'female' ? Icons.female : Icons.male, color: genderColor(e.key)),
+                  selected: d.gender == e.key,
+                  onSelected: (_) {
+                    d.gender = e.key;
+                    d.genderPublic = true;
+                    widget.onChanged();
+                  },
+                ),
               ),
+              if (e.key == 'female') const SizedBox(width: 8),
+            ],
           ],
         ),
-        if (d.gender != null)
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('프로필에 성별 표시'),
-            value: d.genderPublic,
-            onChanged: (v) {
-              d.genderPublic = v;
-              widget.onChanged();
-            },
-          ),
         label('관심사', '최대 10개'),
         Wrap(
           spacing: 8,

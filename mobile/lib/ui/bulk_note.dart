@@ -156,11 +156,6 @@ class _BulkNotePageState extends State<BulkNotePage> {
               selected: {_gender},
               onSelectionChanged: (s) => _changed(() => _gender = s.first),
             ),
-            if (_gender != 'all')
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text('성별을 공개한 회원에게만 보내요.', style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
-              ),
             label('보낼 인원'),
             Wrap(
               spacing: 8,

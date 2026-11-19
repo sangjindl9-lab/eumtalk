@@ -146,7 +146,7 @@ class _ProfilePageState extends State<ProfilePage> {
             )
           : const StateView.loading();
     } else {
-      final meta = [p.ageBand, if (p.genderLabel != null) p.genderLabel!].join(' · ');
+      final meta = p.ageBand;
       body = ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         children: [
@@ -164,6 +164,8 @@ class _ProfilePageState extends State<ProfilePage> {
                     Row(
                       children: [
                         Flexible(child: Text(p.nickname, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700))),
+                        const SizedBox(width: 8),
+                        GenderMark(p.gender, size: 18),
                         if (p.vip) ...[const SizedBox(width: 8), const VipBadge()],
                       ],
                     ),

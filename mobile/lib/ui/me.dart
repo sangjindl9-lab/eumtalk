@@ -1,15 +1,16 @@
+import '../core/api.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../core/api.dart';
 import '../core/app_state.dart';
+import '../core/app_update.dart';
 import '../core/brand.dart';
-import 'me_more.dart';
 import 'bulk_note.dart';
 import 'growth.dart' show AttendanceCard, InvitePage;
+import 'me_more.dart';
 import 'media.dart';
 import 'monetize.dart' show VipBadge, VisitorsPage, showBoostSheet;
-import 'points.dart';
 import 'notify_settings.dart';
+import 'points.dart';
 import 'profile_form.dart';
 import 'widgets.dart';
 
@@ -278,6 +279,15 @@ class MeTab extends StatelessWidget {
               },
             ),
             link(Icons.person_remove_outlined, '계정 삭제 신청', const DeleteAccountPage()),
+            FutureBuilder<int?>(
+              future: AppUpdate.loadVersion(),
+              builder: (context, snap) => ListTile(
+                leading: const Icon(Icons.system_update_outlined),
+                title: Text('앱 버전 ${AppUpdate.versionName.isEmpty ? '' : AppUpdate.versionName}'),
+                subtitle: const Text('눌러서 새 버전이 있는지 확인'),
+                onTap: () => AppUpdate.prompt(context, app.api, force: true),
+              ),
+            ),
             if (AppState.allowServerOverride)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),

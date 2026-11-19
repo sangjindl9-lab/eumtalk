@@ -26,6 +26,7 @@ const SECTIONS: { id: string; label: string; roles: string[] }[] = [
   { id: 'prices', label: '가격 설정', roles: ['finance'] },
   { id: 'growth', label: '마케팅·초대', roles: ['support', 'finance'] },
   { id: 'campaigns', label: '단체 알림', roles: ['support'] },
+  { id: 'release', label: '앱 버전·업데이트', roles: ['support'] },
   { id: 'announcements', label: '운영 공지', roles: ['support'] },
   { id: 'inquiries', label: '문의', roles: ['support'] },
   { id: 'law', label: '수사기관 요청', roles: [] },
@@ -172,6 +173,7 @@ export default function AdminApp({ apiBase }: { apiBase: string }) {
         {current.id === 'law' && <LawRequests call={call} />}
         {current.id === 'growth' && <Growth call={call} />}
         {current.id === 'campaigns' && <Campaigns call={call} />}
+        {current.id === 'release' && <Release call={call} />}
         {current.id === 'admins' && <Admins call={call} />}
         {current.id === 'audit' && <Audit call={call} />}
       </main>
@@ -1025,6 +1027,66 @@ function Campaigns({ call }: { call: Call }) {
           ['보낸 사람', (r) => r.adminName || ''],
         ]}
       />
+    </Page>
+  );
+}
+
+function Release({ call }: { call: Call }) {
+  const { data, error, reload } = useLoad(() => call('GET', '/app-release'), []);
+  const act = useAction(reload);
+  const save = (r: Row) => (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const notify = f.get('notify') === 'on';
+    if (notify && !window.confirm('모든 회원에게 "새 버전이 나왔어요" 알림을 보낼까요? 스토어 검토가 끝나 새 버전이 실제로 내려받아지는지 먼저 확인하세요.')) return;
+    act.run(async () => {
+      const res = await call('POST', '/app-release', {
+        platform: r.platform,
+        latestBuild: Number(f.get('latestBuild')),
+        latestName: f.get('latestName'),
+        minBuild: Number(f.get('minBuild')),
+        notes: f.get('notes'),
+        storeUrl: f.get('storeUrl'),
+        notify,
+      });
+      if (notify) window.alert(`${num.format(res.sent)}명에게 업데이트 알림을 보냈습니다.`);
+    });
+  };
+  return (
+    <Page title="앱 버전·업데이트" sub="스토어에 새 버전이 올라가면 여기서 최신 버전을 등록하세요. 앱(0.9.0 이상)을 열면 업데이트 안내 창이 뜹니다" error={error || act.error}>
+      {(data?.items || []).map((r: Row) => (
+        <form key={`${r.platform}-${r.updatedAt}`} className="panel stack" onSubmit={save(r)}>
+          <h2>{r.platform === 'android' ? 'Android (Google Play)' : 'iOS (App Store)'}</h2>
+          <div className="grid2">
+            <label className="stack">
+              <span>최신 버전 번호(빌드, 예: 0.9.0+9 의 9)</span>
+              <input name="latestBuild" type="number" min={0} defaultValue={r.latestBuild} required />
+            </label>
+            <label className="stack">
+              <span>최신 버전 이름(예: 0.9.0)</span>
+              <input name="latestName" defaultValue={r.latestName} />
+            </label>
+            <label className="stack">
+              <span>필수 업데이트 기준(이 번호보다 낮으면 앱을 쓸 수 없게 안내, 0 = 없음)</span>
+              <input name="minBuild" type="number" min={0} defaultValue={r.minBuild} required />
+            </label>
+            <label className="stack">
+              <span>스토어 주소</span>
+              <input name="storeUrl" defaultValue={r.storeUrl} />
+            </label>
+          </div>
+          <textarea name="notes" rows={3} placeholder="업데이트 안내 문구(예: 남녀 구분과 전체 쪽지가 생겼어요)" defaultValue={r.notes} />
+          <label className="inline">
+            <input type="checkbox" name="notify" /> 저장하면서 모든 회원에게 "새 버전" 휴대폰 알림 보내기 (버전마다 한 번)
+          </label>
+          <p className="muted">마지막 알림을 보낸 버전: {r.notifiedBuild || '-'} · 저장: {when(r.updatedAt)}</p>
+          <div className="actions">
+            <button className="primary" type="submit">
+              저장
+            </button>
+          </div>
+        </form>
+      ))}
     </Page>
   );
 }

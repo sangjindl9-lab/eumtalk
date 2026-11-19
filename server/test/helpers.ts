@@ -67,7 +67,7 @@ export async function signup(nickname: string, extra: Record<string, unknown> = 
   assert.equal(verify.body.status, 'signup');
   const adult = await api('POST', '/v1/auth/adult/verify', null, { signupToken: verify.body.signupToken, devBirthYear: 1990 });
   assert.equal(adult.status, 200, JSON.stringify(adult.body));
-  const done = await api('POST', '/v1/auth/signup', null, { signupToken: verify.body.signupToken, nickname, regionId: WONJU, interestIds: ['i01', 'i09'], bio: `${nickname} 소개`, ...extra });
+  const done = await api('POST', '/v1/auth/signup', null, { signupToken: verify.body.signupToken, nickname, regionId: WONJU, interestIds: ['i01', 'i09'], bio: `${nickname} 소개`, gender: 'male', ...extra });
   assert.equal(done.status, 201, JSON.stringify(done.body));
   return { token: done.body.token, userId: done.body.userId, nickname, phone };
 }

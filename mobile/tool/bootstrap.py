@@ -177,5 +177,49 @@ elif icon.exists():
         out.save(t)
     step(f"런처 아이콘 {len(targets)}개 교체")
 
+# ── Android: 앱 버전 확인·Play 스토어 열기(업데이트 안내용 채널) ─────────────
+kotlin_dir = MOBILE / "android/app/src/main/kotlin"
+if kotlin_dir.exists():
+    existing = list(kotlin_dir.rglob("MainActivity.kt"))
+    target = existing[0] if existing else kotlin_dir.joinpath(*app_id.split("."), "MainActivity.kt")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    pkg = ".".join(target.relative_to(kotlin_dir).parts[:-1])
+    target.write_text(f"""package {pkg}
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
+
+// eumtalk: tool/bootstrap.py 가 만든다. 앱 버전 번호 확인과 Play 스토어 열기(업데이트 안내).
+class MainActivity : FlutterActivity() {{
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {{
+        super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "eumtalk/app").setMethodCallHandler {{ call, result ->
+            when (call.method) {{
+                "versionInfo" -> {{
+                    val info = packageManager.getPackageInfo(packageName, 0)
+                    val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
+                    result.success(mapOf("build" to code, "name" to (info.versionName ?: "")))
+                }}
+                "openStore" -> {{
+                    val web = call.argument<String>("url") ?: "https://play.google.com/store/apps/details?id=$packageName"
+                    try {{
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }} catch (e: Exception) {{
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(web)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }}
+                    result.success(true)
+                }}
+                else -> result.notImplemented()
+            }}
+        }}
+    }}
+}}
+""", encoding="utf-8")
+    step(f"MainActivity: 버전 확인·스토어 열기 채널 ({pkg})")
+
 step("완료. 이어서: flutter pub get && flutter run --dart-define=API_BASE_URL=http://<서버주소>:3000")
 sys.exit(0)

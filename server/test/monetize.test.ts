@@ -149,7 +149,7 @@ test('오늘의 추천 친구와 단체 알림(광고성은 동의자만·(광�
 test('전체 쪽지: 지역(시·도·시군구)·성별(공개한 회원만)·인원(최대 50명)', async () => {
   const me = await signup(nick('쪽지'));
   const f1 = await signup(nick('여1'), { gender: 'female', genderPublic: true });
-  const f2 = await signup(nick('여2'), { gender: 'female', genderPublic: false }); // 성별 비공개 → 성별 조건에서 제외
+  const f2 = await signup(nick('여2'), { gender: 'female', genderPublic: false }); // 비공개를 골라도 공개로 저장된다
   const m1 = await signup(nick('남1'), { gender: 'male', genderPublic: true });
   await sql(`UPDATE profiles SET show_in_nearby = true, accept_greetings = true`);
   const [{ sido, region_id }] = await sql<any>(`SELECT r.sido, p.region_id FROM profiles p JOIN regions r ON r.id = p.region_id WHERE p.user_id = $1`, [me.userId]);
@@ -167,6 +167,35 @@ test('전체 쪽지: 지역(시·도·시군구)·성별(공개한 회원만)·�
   const got = await sql<any>(`SELECT receiver_id FROM greeting_requests WHERE sender_id = $1`, [me.userId]);
   const ids = got.map((g: any) => g.receiver_id);
   assert.ok(ids.includes(f1.userId));
-  assert.ok(!ids.includes(f2.userId));
+  assert.ok(ids.includes(f2.userId)); // 남녀 구분: 성별은 항상 공개
   assert.ok(!ids.includes(m1.userId));
+});
+
+test('남녀 구분: 성별 필수·항상 표시, 주변 성별 필터, 앱 업데이트 정보·알림', async () => {
+  const w = await signup(nick('여성'), { gender: 'female', genderPublic: false });
+  const m = await signup(nick('남성'), { gender: 'male' });
+  const viewer = await signup(nick('보기'), { gender: 'male' });
+  await sql(`UPDATE profiles SET show_in_nearby = true`);
+  // 비공개를 골라도 항상 표시
+  assert.equal((await api('GET', `/v1/users/${w.userId}`, viewer.token)).body.profile.gender, 'female');
+  const fem = await api('GET', '/v1/nearby?scope=all&genders=female&limit=50', viewer.token);
+  assert.ok(fem.body.items.some((p: any) => p.userId === w.userId));
+  assert.ok(fem.body.items.every((p: any) => p.gender === 'female'));
+  assert.ok(!fem.body.items.some((p: any) => p.userId === m.userId));
+  // 성별 없이는 가입·변경 불가
+  assert.equal((await api('PATCH', '/v1/me', m.token, { gender: 'other' })).status, 400);
+
+  const owner = await adminLogin();
+  const r = await api('POST', '/v1/admin/app-release', owner, { platform: 'android', latestBuild: 9, latestName: '0.9.0', minBuild: 4, notes: '남녀 구분이 생겼어요', notify: true });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.ok(r.body.sent >= 3);
+  const cfg = await api('GET', '/v1/app-config');
+  assert.equal(cfg.body.update.android.latestBuild, 9);
+  assert.equal(cfg.body.update.android.minBuild, 4);
+  assert.ok(cfg.body.update.android.storeUrl.includes('kr.eumsoft.eumtalk'));
+  // 같은 버전은 다시 알리지 않는다
+  assert.equal((await api('POST', '/v1/admin/app-release', owner, { platform: 'android', latestBuild: 9, latestName: '0.9.0', minBuild: 4, notify: true })).body.sent, 0);
+  assert.equal((await api('POST', '/v1/admin/app-release', owner, { platform: 'android', latestBuild: 3, minBuild: 4 })).status, 400);
+  const pushed = await sql<any>(`SELECT count(*)::int AS n FROM push_log WHERE user_id = $1 AND data->>'kind' = 'update'`, [w.userId]);
+  assert.equal(pushed[0].n, 1);
 });

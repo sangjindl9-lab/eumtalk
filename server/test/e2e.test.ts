@@ -29,13 +29,13 @@ test('가입: 휴대폰 인증과 성인 확인을 각각 거쳐야 하고, 미�
   const verify = await api('POST', '/v1/auth/phone/verify', null, { verificationId: start.body.verificationId, code: '000000' });
   const token = verify.body.signupToken;
 
-  const early = await api('POST', '/v1/auth/signup', null, { signupToken: token, nickname: nick('미인증'), regionId: WONJU });
+  const early = await api('POST', '/v1/auth/signup', null, { signupToken: token, nickname: nick('미인증'), regionId: WONJU, gender: 'female' });
   assert.equal(early.body.error.code, 'ADULT_REQUIRED');
 
   const minor = await api('POST', '/v1/auth/adult/verify', null, { signupToken: token, devBirthYear: new Date().getFullYear() - 17 });
   assert.equal(minor.status, 403);
   assert.equal(minor.body.error.code, 'NOT_ADULT');
-  const after = await api('POST', '/v1/auth/signup', null, { signupToken: token, nickname: nick('미성년'), regionId: WONJU });
+  const after = await api('POST', '/v1/auth/signup', null, { signupToken: token, nickname: nick('미성년'), regionId: WONJU, gender: 'female' });
   assert.equal(after.body.error.code, 'SIGNUP_EXPIRED');
 });
 
@@ -44,7 +44,7 @@ test('가입 후 같은 번호로 다시 인증하면 로그인된다', async ()
   const s1 = await api('POST', '/v1/auth/phone/start', null, { phone });
   const v1 = await api('POST', '/v1/auth/phone/verify', null, { verificationId: s1.body.verificationId, code: '000000' });
   await api('POST', '/v1/auth/adult/verify', null, { signupToken: v1.body.signupToken, devBirthYear: 1985 });
-  const done = await api('POST', '/v1/auth/signup', null, { signupToken: v1.body.signupToken, nickname: nick('재로그인'), regionId: WONJU });
+  const done = await api('POST', '/v1/auth/signup', null, { signupToken: v1.body.signupToken, nickname: nick('재로그인'), regionId: WONJU, gender: 'female' });
   assert.equal(done.status, 201);
   const s2 = await api('POST', '/v1/auth/phone/start', null, { phone });
   const v2 = await api('POST', '/v1/auth/phone/verify', null, { verificationId: s2.body.verificationId, code: '000000' });
@@ -84,7 +84,7 @@ test('주변: 위치 권한 없이 원주시를 고른 회원도 서로 보이�
   assert.ok(hit, '같은 지역 회원이 목록에 있어야 한다');
   assert.equal(hit.regionName, '강원 원주시');
   assert.equal(hit.proximity, 'same_region');
-  assert.equal(hit.gender, null, '비공개 성별은 내려가지 않는다');
+  assert.equal(hit.gender, 'female', '남녀 구분: 성별은 항상 표시된다');
   assert.deepEqual(hit.commonInterests, ['등산', '맛집']);
   const raw = JSON.stringify(list.body) + JSON.stringify((await api('GET', `/v1/users/${b.userId}`, a.token)).body);
   for (const key of ['"lat"', '"lng"', 'dist', 'phone', 'birth', 'last_active', 'seen_at']) assert.ok(!raw.includes(key), `응답에 ${key} 포함`);

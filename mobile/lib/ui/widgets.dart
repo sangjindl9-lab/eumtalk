@@ -308,3 +308,31 @@ Future<void> showReportSheet(BuildContext context, {required String targetType, 
   );
   if (sent == true && context.mounted) showMessage(context, '신고가 접수되었습니다.');
 }
+
+/// 남녀 구분 색: 여자 분홍, 남자 파랑
+Color genderColor(String? gender) => gender == 'female' ? const Color(0xFFE0457B) : gender == 'male' ? const Color(0xFF2F7BD8) : Colors.grey;
+
+/// 이름 옆 남녀 표시(♀ 여 / ♂ 남)
+class GenderMark extends StatelessWidget {
+  const GenderMark(this.gender, {super.key, this.size = 16, this.showText = true});
+  final String? gender;
+  final double size;
+  final bool showText;
+
+  @override
+  Widget build(BuildContext context) {
+    if (gender != 'male' && gender != 'female') return const SizedBox.shrink();
+    final c = genderColor(gender);
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: showText ? 6 : 2, vertical: 1),
+      decoration: BoxDecoration(color: c.withAlpha(28), borderRadius: BorderRadius.circular(6)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(gender == 'female' ? Icons.female : Icons.male, size: size, color: c),
+          if (showText) Text(gender == 'female' ? '여' : '남', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}

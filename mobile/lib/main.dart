@@ -1,10 +1,11 @@
+import 'core/app_state.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'core/app_state.dart';
+import 'core/app_update.dart';
 import 'core/brand.dart';
-import 'ui/chat_page.dart';
 import 'ui/board.dart' show PostDetailPage;
+import 'ui/chat_page.dart';
 import 'ui/home.dart';
 import 'ui/onboarding.dart';
 import 'ui/widgets.dart';
@@ -56,6 +57,8 @@ class _EumTalkAppState extends State<EumTalkApp> {
     } else if (data['postId'] is String) {
       nav.popUntil((r) => r.isFirst);
       nav.push(MaterialPageRoute<void>(builder: (_) => PostDetailPage(postId: data['postId'] as String)));
+    } else if (data['kind'] == 'update') {
+      await AppUpdate.openStore();
     } else if (data['kind'] == 'recommend') {
       HomeShell.selectTab(0);
       nav.popUntil((r) => r.isFirst);

@@ -17,9 +17,15 @@ export class SystemController {
 
   /** 앱 이름·색상·운영사 정보. 저장소의 brand/brand.json 한 곳에서 바꾼다. */
   @Get('v1/app-config')
-  appConfig() {
+  async appConfig() {
     const b = this.cfg.brand;
+    const rel = await this.db.query<any>('SELECT * FROM app_release').catch(() => [] as any[]);
+    const update: Record<string, unknown> = {};
+    for (const r of rel) {
+      update[r.platform] = { latestBuild: r.latest_build, latestName: r.latest_name, minBuild: r.min_build, notes: r.notes, storeUrl: r.store_url };
+    }
     return {
+      update,
       appName: b.appName,
       appNameEn: b.appNameEn,
       tagline: b.tagline,

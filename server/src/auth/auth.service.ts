@@ -199,15 +199,17 @@ export class AuthService {
     if (!NICKNAME.test(nickname)) throw bad('INVALID_NICKNAME', '닉네임은 한글·영문·숫자·밑줄 2~12자로 입력해 주세요.');
     const bio = typeof body?.bio === 'string' ? body.bio.trim().slice(0, 300) : '';
     this.filter.assertText(bio);
-    let gender = ['male', 'female', 'other'].includes(body?.gender) ? body.gender : null;
-    const genderPublic = gender ? body?.genderPublic === true : false;
+    // 남녀 구분: 성별(남·여)은 필수이고 항상 다른 회원에게 표시된다.
+    let gender = ['male', 'female'].includes(body?.gender) ? body.gender : null;
+    const genderPublic = true;
     const regionId = String(body?.regionId || '');
     const interestIds: string[] = Array.isArray(body?.interestIds) ? [...new Set<string>(body.interestIds.map(String))].slice(0, 10) : [];
 
     return this.db.tx(async (q) => {
       const v = await this.pendingSignup(q, body?.signupToken, true);
       if (!v.adult_verified_at || !v.birth_year) throw forbidden('ADULT_REQUIRED', '성인 확인을 먼저 완료해 주세요.');
-      if (!gender && v.gender) gender = v.gender; // 본인확인 결과의 성별(공개 여부는 회원이 정한다)
+      if (!gender && (v.gender === 'male' || v.gender === 'female')) gender = v.gender; // 본인확인 결과의 성별
+      if (!gender) throw bad('GENDER_REQUIRED', '성별(남·여)을 선택해 주세요.');
       if (!(await q.one('SELECT 1 FROM regions WHERE id = $1', [regionId]))) throw bad('INVALID_REGION', '활동 지역을 선택해 주세요.');
       if (await q.one('SELECT 1 FROM profiles WHERE lower(nickname) = lower($1)', [nickname])) {
         throw conflict('NICKNAME_TAKEN', '이미 사용 중인 닉네임입니다.');

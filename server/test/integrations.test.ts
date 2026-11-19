@@ -135,12 +135,12 @@ test('본인인증(포트원): 인증 페이지 → 서버가 결과를 직접 �
   assert.equal(row.birth_year, 1991);
 
   const nickname = nick('본인인증');
-  const sign = await api('POST', '/v1/auth/signup', null, { signupToken: done.body.signupToken, nickname, regionId: WONJU }, liveBase);
+  const sign = await api('POST', '/v1/auth/signup', null, { signupToken: done.body.signupToken, nickname, regionId: WONJU, gender: 'female' }, liveBase);
   assert.equal(sign.status, 201, JSON.stringify(sign.body));
   const me = await api('GET', '/v1/me', sign.body.token, undefined, liveBase);
   assert.equal(me.body.ageBand, '30대');
   assert.equal(me.body.gender, 'female');
-  assert.equal(me.body.genderPublic, false, '본인인증의 성별은 기본 비공개');
+  assert.equal(me.body.genderPublic, true, '남녀 구분: 성별은 항상 표시');
   // 실명·생년월일·번호는 다른 회원에게 보이지 않는다.
   const other = await signup(nick('관찰자'));
   const view = await api('GET', `/v1/users/${sign.body.userId}`, other.token, undefined, base);
@@ -275,7 +275,7 @@ test('익명 가입: 본인인증 없이 출생 연도·성인 확인(자기 신
     const st = await api('POST', '/v1/auth/anonymous/start', null, { birthYear: 1990, adultConfirmed: true }, a.base);
     assert.equal(st.status, 200, JSON.stringify(st.body));
     assert.equal(st.body.status, 'signup');
-    const su = await api('POST', '/v1/auth/signup', null, { signupToken: st.body.signupToken, nickname: nick('익명'), regionId: WONJU, interestIds: [] }, a.base);
+    const su = await api('POST', '/v1/auth/signup', null, { signupToken: st.body.signupToken, nickname: nick('익명'), regionId: WONJU, interestIds: [], gender: 'female' }, a.base);
     assert.equal(su.status, 201, JSON.stringify(su.body));
     const me = await api('GET', '/v1/me', su.body.token, undefined, a.base);
     assert.equal(me.status, 200);
@@ -284,7 +284,7 @@ test('익명 가입: 본인인증 없이 출생 연도·성인 확인(자기 신
     assert.equal(priv[0].phone_enc, null);
     assert.equal(priv[0].phone_hash, null);
     // 같은 가입 토큰은 다시 쓸 수 없다
-    assert.equal((await api('POST', '/v1/auth/signup', null, { signupToken: st.body.signupToken, nickname: nick('익명'), regionId: WONJU }, a.base)).status, 400);
+    assert.equal((await api('POST', '/v1/auth/signup', null, { signupToken: st.body.signupToken, nickname: nick('익명'), regionId: WONJU, gender: 'female' }, a.base)).status, 400);
   } finally {
     await a.app.close();
   }

@@ -94,8 +94,11 @@ export class ProfileController {
       if (body.photoMediaId) await this.media.assertOwned(this.db, userId, [String(body.photoMediaId)], 'profile');
       set('photo_media_id', body.photoMediaId || null);
     }
-    if (body?.gender !== undefined) set('gender', ['male', 'female', 'other'].includes(body.gender) ? body.gender : null);
-    if (optBool(body?.genderPublic) !== undefined) set('gender_public', body.genderPublic);
+    if (body?.gender !== undefined) {
+      if (!['male', 'female'].includes(body.gender)) throw bad('GENDER_REQUIRED', '성별(남·여)을 선택해 주세요.');
+      set('gender', body.gender);
+      set('gender_public', true);
+    }
     if (body?.regionId !== undefined) {
       if (!(await this.db.one('SELECT 1 FROM regions WHERE id = $1', [String(body.regionId)]))) throw bad('INVALID_REGION', '활동 지역을 선택해 주세요.');
       set('region_id', String(body.regionId));
@@ -184,9 +187,11 @@ export class ProfileController {
       regionId = String(qy.regionId);
     }
     const list = (v: unknown) => (typeof v === 'string' && v ? v.split(',').slice(0, 10) : undefined);
+    const genders = list(qy.genders)?.filter((g) => g === 'male' || g === 'female');
     const items = await selectPublicProfiles(this.db, {
       viewerId: userId,
       requireVisible: true,
+      genders: genders?.length ? genders : undefined,
       scope,
       regionId,
       ageBands: list(qy.ageBands),

@@ -228,7 +228,7 @@ class _VisitorsPageState extends State<VisitorsPage> {
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: Avatar(name: p.nickname, colorIndex: p.avatarColor, size: 44, mediaId: p.photoMediaId),
-                        title: Row(children: [Flexible(child: Text(p.nickname)), if (p.vip) ...[const SizedBox(width: 6), const VipBadge()]]),
+                        title: Row(children: [Flexible(child: Text(p.nickname)), const SizedBox(width: 6), GenderMark(p.gender), if (p.vip) ...[const SizedBox(width: 6), const VipBadge()]]),
                         subtitle: Text('${p.ageBand} · ${p.proximityLabel} · ${at.month}/${at.day} ${TimeOfDay.fromDateTime(at).format(context)}'),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ProfilePage(userId: p.userId, preview: p))),
@@ -302,7 +302,14 @@ class _TodayPicksStripState extends State<TodayPicksStrip> {
                             Avatar(name: p.nickname, colorIndex: p.avatarColor, size: 52, mediaId: p.photoMediaId),
                             const SizedBox(height: 6),
                             Text(p.nickname, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.labelLarge),
-                            Text(p.ageBand, style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                GenderMark(p.gender, size: 12, showText: false),
+                                const SizedBox(width: 2),
+                                Text(p.ageBand, style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                              ],
+                            ),
                           ],
                         ),
                       ),

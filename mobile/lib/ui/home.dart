@@ -1,3 +1,4 @@
+import '../core/app_update.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'board.dart';
@@ -29,8 +30,15 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     HomeShell._requestedTab.addListener(_onTabRequest);
     // 하루에 한 번 출석 체크 권유(잠깐 뒤에 띄워 첫 화면을 가리지 않는다)
-    Future<void>.delayed(const Duration(seconds: 2), () {
-      if (mounted && !(AppScope.read(context).me?.suspended ?? false)) maybePromptAttendance(context);
+    Future<void>.delayed(const Duration(seconds: 2), () async {
+      if (!mounted) return;
+      final app = AppScope.read(context);
+      if (app.me?.suspended ?? false) return;
+      await AppUpdate.prompt(context, app.api);
+      if (!mounted) return;
+      final g = app.me?.gender;
+      if (g != 'male' && g != 'female') await _askGender();
+      if (mounted) await maybePromptAttendance(context);
     });
   }
 
@@ -38,6 +46,37 @@ class _HomeShellState extends State<HomeShell> {
   void dispose() {
     HomeShell._requestedTab.removeListener(_onTabRequest);
     super.dispose();
+  }
+
+  /// 남녀 구분: 성별을 넣지 않은 기존 회원에게 한 번 묻는다.
+  Future<void> _askGender() async {
+    final app = AppScope.read(context);
+    final picked = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          title: const Text('성별을 알려 주세요'),
+          content: const Text('이음톡은 남녀 구분이 표시돼요. 한 번 선택하면 프로필에 함께 보여요.'),
+          actions: [
+            for (final e in const {'female': '여자', 'male': '남자'}.entries)
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: genderColor(e.key)),
+                onPressed: () => Navigator.of(ctx).pop(e.key),
+                icon: Icon(e.key == 'female' ? Icons.female : Icons.male),
+                label: Text(e.value),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    try {
+      await app.updateMe({'gender': picked});
+    } catch (e) {
+      if (mounted) showMessage(context, e.toString());
+    }
   }
 
   void _onTabRequest() {

@@ -30,6 +30,7 @@ class _NearbyTabState extends State<NearbyTab> {
   String? _regionId;
   String? _regionName;
   final Set<String> _ageBands = {};
+  String _gender = 'all';
   final Set<String> _interestIds = {};
   _LocationNotice _notice = _LocationNotice.none;
   bool _locating = false;
@@ -49,6 +50,7 @@ class _NearbyTabState extends State<NearbyTab> {
     'scope': _scope,
     'offset': '$offset',
     'regionId': ?_regionId,
+    if (_gender != 'all') 'genders': _gender,
     if (_ageBands.isNotEmpty) 'ageBands': _ageBands.join(','),
     if (_interestIds.isNotEmpty) 'interestIds': _interestIds.join(','),
   };
@@ -498,6 +500,22 @@ class _NearbyTabState extends State<NearbyTab> {
                 ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: SegmentedButton<String>(
+                showSelectedIcon: false,
+                segments: [
+                  const ButtonSegment(value: 'all', label: Text('전체')),
+                  ButtonSegment(value: 'female', icon: Icon(Icons.female, color: genderColor('female')), label: const Text('여자')),
+                  ButtonSegment(value: 'male', icon: Icon(Icons.male, color: genderColor('male')), label: const Text('남자')),
+                ],
+                selected: {_gender},
+                onSelectionChanged: (s) {
+                  setState(() => _gender = s.first);
+                  _load();
+                },
+              ),
+            ),
             if (banner != null) Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 10), child: banner),
             const TodayPicksStrip(),
             Expanded(child: content),
@@ -517,7 +535,7 @@ class _PersonCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final p = profile;
-    final meta = [p.ageBand, if (p.genderLabel != null) p.genderLabel!].join(' · ');
+    final meta = p.ageBand;
     final place = [p.proximityLabel, if (p.proximity != 'far' && p.proximity != 'same_region') p.regionName].join(' · ');
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -547,6 +565,7 @@ class _PersonCard extends StatelessWidget {
                       spacing: 8,
                       children: [
                         Text(p.nickname, style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                        GenderMark(p.gender),
                         if (p.vip) const VipBadge(),
                         Text(meta, style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                         if (p.boosted) const BoostTag(),
