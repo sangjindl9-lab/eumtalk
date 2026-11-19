@@ -4,6 +4,7 @@ import '../core/api.dart';
 import '../core/app_state.dart';
 import '../core/brand.dart';
 import 'me_more.dart';
+import 'bulk_note.dart';
 import 'growth.dart' show AttendanceCard, InvitePage;
 import 'media.dart';
 import 'monetize.dart' show VipBadge, VisitorsPage, showBoostSheet;
@@ -170,6 +171,7 @@ class MeTab extends StatelessWidget {
             link(Icons.toll_outlined, '포인트·VIP', const PointsPage(), subtitle: '충전, VIP 구독, 사용 내역'),
             link(Icons.card_giftcard_outlined, '친구 초대하고 포인트 받기', const InvitePage(), subtitle: '친구도 나도 포인트'),
             link(Icons.visibility_outlined, '나를 본 사람', const VisitorsPage(), subtitle: '오늘 누가 내 프로필을 봤을까요?'),
+            link(Icons.campaign_outlined, '전체 쪽지', const BulkNotePage(), subtitle: '지역·성별을 골라 10~50명에게 한 번에'),
             ListTile(
               leading: const Icon(Icons.rocket_launch_outlined),
               title: const Text('내 프로필 띄우기'),

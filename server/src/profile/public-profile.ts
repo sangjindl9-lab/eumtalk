@@ -33,6 +33,10 @@ export interface ListFilter {
   scope?: 'near' | 'sido' | 'all';
   regionId?: string;
   ageBands?: string[];
+  /** 시·도 단위(전체 쪽지 지역 선택) */
+  sido?: string;
+  /** 성별을 공개한 회원 중에서만 거른다(비공개 성별은 대상 선택에 쓰지 않는다) */
+  genders?: string[];
   interestIds?: string[];
   sort?: 'near' | 'recent';
   limit?: number;
@@ -58,6 +62,8 @@ export async function selectPublicProfiles(q: Q, f: ListFilter): Promise<PublicP
   if (f.requireVisible) where.push(`p.show_in_nearby`);
   if (f.regionId) where.push(`(p.region_id = ${add(f.regionId)} OR (p.browse_until > now() AND p.browse_region_id = $${params.length}))`);
   if (f.ageBands?.length) where.push(`p.age_band = ANY(${add(f.ageBands)}::text[])`);
+  if (f.sido) where.push(`r.sido = ${add(f.sido)}`);
+  if (f.genders?.length) where.push(`p.gender_public AND p.gender = ANY(${add(f.genders)}::text[])`);
   if (f.interestIds?.length) {
     where.push(`EXISTS (SELECT 1 FROM profile_interests fi WHERE fi.user_id = p.user_id AND fi.interest_id = ANY(${add(f.interestIds)}::text[]))`);
   }

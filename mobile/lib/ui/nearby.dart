@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../core/api.dart';
 import '../core/models.dart';
+import 'bulk_note.dart';
 import 'monetize.dart' show BoostTag, TodayPicksStrip, VipBadge, showBoostSheet;
 import 'profile_page.dart';
 import 'widgets.dart';
@@ -145,80 +146,6 @@ class _NearbyTabState extends State<NearbyTab> {
   }
 
   /// 다중 인사(유료): 보내기 전에 대상 수와 포인트 비용을 보여주고, 실제 발송분만 차감된다.
-  Future<void> _multiGreet() async {
-    final app = AppScope.read(context);
-    final filter = {
-      'scope': _scope,
-      if (_ageBands.isNotEmpty) 'ageBands': _ageBands.toList(),
-      if (_interestIds.isNotEmpty) 'interestIds': _interestIds.toList(),
-    };
-    Map<String, dynamic> preview;
-    try {
-      preview = await app.api.post('/v1/greetings/multi/preview', {'filter': filter});
-    } catch (e) {
-      if (mounted) showMessage(context, e.toString());
-      return;
-    }
-    if (!mounted) return;
-    final count = (preview['targetCount'] as num).toInt();
-    if (count == 0) {
-      showMessage(context, '지금 조건에서는 새로 인사를 보낼 수 있는 회원이 없어요.');
-      return;
-    }
-    final c = TextEditingController();
-    final text = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (sheet) {
-        final t = Theme.of(sheet);
-        return Padding(
-          padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.of(sheet).viewInsets.bottom),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('여러 명에게 인사', style: t.textTheme.titleLarge),
-              const SizedBox(height: 8),
-              Text(
-                '받는 사람 $count명 · ${comma(preview['cost'] as num)}P (1명당 ${preview['unitPrice']}P, 보유 ${comma(preview['balance'] as num)}P)',
-                style: t.textTheme.titleSmall,
-              ),
-              const SizedBox(height: 4),
-              Text('지금 찾기 조건에 맞고 새 인사를 받는 회원에게만 보냅니다. 수신 거부·차단·이미 대화 중인 회원은 빠지고, 실제로 보낸 만큼만 차감됩니다.', style: t.textTheme.bodySmall),
-              const SizedBox(height: 12),
-              TextField(
-                controller: c,
-                autofocus: true,
-                maxLength: 100,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(hintText: '인사말 (링크는 넣을 수 없어요)'),
-              ),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: preview['enough'] == true ? () => Navigator.of(sheet).pop(c.text.trim()) : null,
-                  child: Text(preview['enough'] == true ? '보내기' : '포인트가 부족해요'),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-    if (text == null || text.isEmpty || !mounted) return;
-    try {
-      final res = await app.api.post('/v1/greetings/multi', {'text': text, 'filter': filter});
-      if (mounted) showMessage(context, '${res['sentCount']}명에게 인사를 보냈어요. ${comma(res['cost'] as num)}P 사용, 남은 포인트 ${comma(res['balance'] as num)}P');
-    } on ApiException catch (e) {
-      if (mounted) showMessage(context, e.message);
-    } on NetworkException catch (e) {
-      if (mounted) showMessage(context, e.toString());
-    }
-  }
-
   void _widen() {
     setState(() {
       _regionId = null;
@@ -533,7 +460,11 @@ class _NearbyTabState extends State<NearbyTab> {
             icon: const Icon(Icons.rocket_launch_outlined),
             tooltip: '내 프로필 띄우기',
           ),
-          IconButton(onPressed: _multiGreet, icon: const Icon(Icons.campaign_outlined), tooltip: '여러 명에게 인사'),
+          IconButton(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BulkNotePage())),
+            icon: const Icon(Icons.campaign_outlined),
+            tooltip: '전체 쪽지',
+          ),
           Badge(
             isLabelVisible: filterCount > 0,
             label: Text('$filterCount'),

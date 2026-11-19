@@ -14,7 +14,7 @@ import { blockIn } from '../safety/safety.service';
 const MAX_LEN = 100;
 const DAILY_LIMIT = 30;
 const REGREET_DAYS = 7;
-const MULTI_MAX = 30;
+const MULTI_MAX = 50; // 전체 쪽지: 10·20·30·40·50명
 
 /** 장터 거래 문의처럼 "무엇에 대한 인사인지"를 함께 전달하는 정보 */
 export interface GreetingContext {
@@ -152,16 +152,23 @@ export class GreetingsService {
   /** 조건에 맞는 회원 중 실제로 인사를 받을 수 있는 대상만 고른다. */
   private async multiTargets(q: Q, userId: string, filter: any, max: number): Promise<string[]> {
     const list = (v: unknown) => (Array.isArray(v) ? v.map(String).slice(0, 10) : undefined);
+    const genders = list(filter?.genders)?.filter((g) => g === 'male' || g === 'female');
+    const regionId = typeof filter?.regionId === 'string' && filter.regionId ? filter.regionId : undefined;
+    const sido = !regionId && typeof filter?.sido === 'string' && filter.sido ? filter.sido.slice(0, 20) : undefined;
     const f: ListFilter = {
       viewerId: userId,
       requireVisible: true,
-      scope: ['near', 'sido', 'all'].includes(filter?.scope) ? filter.scope : 'near',
+      // 지역을 직접 고르면 그 지역(시·군·구 또는 시·도) 안에서만 찾는다.
+      scope: regionId || sido ? 'all' : ['near', 'sido', 'all'].includes(filter?.scope) ? filter.scope : 'near',
+      regionId,
+      sido,
+      genders: genders?.length ? genders : undefined,
       ageBands: list(filter?.ageBands),
       interestIds: list(filter?.interestIds),
-      sort: 'near',
-      limit: 200,
+      sort: 'recent',
+      limit: 300,
     };
-    const candidates = (await selectPublicProfiles(q, f)).filter((p) => p.acceptsGreetings && p.proximity !== 'visiting').map((p) => p.userId);
+    const candidates = (await selectPublicProfiles(q, f)).filter((p) => p.acceptsGreetings && (regionId || sido || p.proximity !== 'visiting')).map((p) => p.userId);
     if (candidates.length === 0) return [];
     // 수신 거부(위에서 제외), 차단(조회에서 제외), 이미 대화 중·대기 중·최근 거절 대상은 서버에서 뺀다.
     const excluded = await q.query<{ id: string }>(

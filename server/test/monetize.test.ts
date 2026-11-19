@@ -145,3 +145,28 @@ test('오늘의 추천 친구와 단체 알림(광고성은 동의자만·(광�
   // 동의 철회 시 일시가 지워진다
   assert.equal((await api('PATCH', '/v1/me', u.token, { notify: { marketing: false } })).body.marketingConsentAt, null);
 });
+
+test('전체 쪽지: 지역(시·도·시군구)·성별(공개한 회원만)·인원(최대 50명)', async () => {
+  const me = await signup(nick('쪽지'));
+  const f1 = await signup(nick('여1'), { gender: 'female', genderPublic: true });
+  const f2 = await signup(nick('여2'), { gender: 'female', genderPublic: false }); // 성별 비공개 → 성별 조건에서 제외
+  const m1 = await signup(nick('남1'), { gender: 'male', genderPublic: true });
+  await sql(`UPDATE profiles SET show_in_nearby = true, accept_greetings = true`);
+  const [{ sido, region_id }] = await sql<any>(`SELECT r.sido, p.region_id FROM profiles p JOIN regions r ON r.id = p.region_id WHERE p.user_id = $1`, [me.userId]);
+  await give(me.userId, 10000);
+  const pv = async (filter: any, max = 50) => (await api('POST', '/v1/greetings/multi/preview', me.token, { filter, max })).body;
+  const female = await pv({ sido, genders: ['female'] });
+  assert.ok(female.targetCount >= 1);
+  const all = await pv({ sido });
+  assert.ok(all.targetCount >= 3);
+  assert.equal((await pv({ regionId: region_id, genders: ['male'] })).targetCount >= 1, true);
+  assert.equal((await pv({ sido: '없는도' })).targetCount, 0);
+  assert.equal((await pv({ sido }, 1)).targetCount, 1);
+  const send = await api('POST', '/v1/greetings/multi', me.token, { filter: { sido, genders: ['female'] }, max: 10, text: '안녕하세요 반가워요' });
+  assert.equal(send.status, 200, JSON.stringify(send.body));
+  const got = await sql<any>(`SELECT receiver_id FROM greeting_requests WHERE sender_id = $1`, [me.userId]);
+  const ids = got.map((g: any) => g.receiver_id);
+  assert.ok(ids.includes(f1.userId));
+  assert.ok(!ids.includes(f2.userId));
+  assert.ok(!ids.includes(m1.userId));
+});
