@@ -22,12 +22,13 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _index = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     HomeShell._requestedTab.addListener(_onTabRequest);
     // 하루에 한 번 출석 체크 권유(잠깐 뒤에 띄워 첫 화면을 가리지 않는다)
     Future<void>.delayed(const Duration(seconds: 2), () async {
@@ -42,8 +43,15 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
 
+  // 앱을 다시 열었을 때(백그라운드 → 앞)도 새 버전을 확인한다.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) AppUpdate.prompt(context, AppScope.read(context).api);
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     HomeShell._requestedTab.removeListener(_onTabRequest);
     super.dispose();
   }

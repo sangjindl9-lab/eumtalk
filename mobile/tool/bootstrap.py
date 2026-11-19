@@ -119,6 +119,12 @@ android {""", 1)
         g = g.replace("minSdk = flutter.minSdkVersion", "minSdk = maxOf(flutter.minSdkVersion, 24)", 1)
         app_gradle.write_text(g, encoding="utf-8")
         step("app/build.gradle.kts: 업로드 키 서명(key.properties)·minSdk 24 반영")
+    g = app_gradle.read_text(encoding="utf-8")
+    if "com.google.android.play:app-update" not in g:
+        # Play 인앱 업데이트 정보(새 버전 여부) 조회용
+        g = g.rstrip() + '\n\ndependencies {\n    implementation("com.google.android.play:app-update:2.1.0")\n}\n'
+        app_gradle.write_text(g, encoding="utf-8")
+        step("app/build.gradle.kts: Play 인앱 업데이트 라이브러리 추가")
 
 # ── iOS ──────────────────────────────────────────────────────────────────
 plist_path = MOBILE / "ios/Runner/Info.plist"
@@ -192,6 +198,8 @@ import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.install.model.UpdateAvailability
 
 // eumtalk: tool/bootstrap.py 가 만든다. 앱 버전 번호 확인과 Play 스토어 열기(업데이트 안내).
 class MainActivity : FlutterActivity() {{
@@ -203,6 +211,20 @@ class MainActivity : FlutterActivity() {{
                     val info = packageManager.getPackageInfo(packageName, 0)
                     val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
                     result.success(mapOf("build" to code, "name" to (info.versionName ?: "")))
+                }}
+                // Google Play 에 이 앱의 새 버전이 있는지(Play 에서 설치한 앱만 알 수 있다)
+                "playUpdateInfo" -> {{
+                    try {{
+                        AppUpdateManagerFactory.create(this).appUpdateInfo
+                            .addOnSuccessListener {{ info ->
+                                val available = info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE ||
+                                    info.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS
+                                result.success(mapOf("available" to available, "versionCode" to info.availableVersionCode().toLong()))
+                            }}
+                            .addOnFailureListener {{ result.success(null) }}
+                    }} catch (e: Exception) {{
+                        result.success(null)
+                    }}
                 }}
                 "openStore" -> {{
                     val web = call.argument<String>("url") ?: "https://play.google.com/store/apps/details?id=$packageName"

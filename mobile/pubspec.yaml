@@ -1,7 +1,7 @@
 name: eumtalk
 description: "이음톡 — 내 주변 사람과 관심사로 이어지는 동네 대화"
 publish_to: "none"
-version: 0.9.1+10
+version: 0.9.2+11
 
 environment:
   sdk: ^3.13.0
