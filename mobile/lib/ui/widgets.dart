@@ -336,3 +336,77 @@ class GenderMark extends StatelessWidget {
     );
   }
 }
+
+/// 화면 위쪽 탭: 글자 + 선택 밑줄(상자형 버튼 대신)
+class UnderlineTabs<T> extends StatelessWidget {
+  const UnderlineTabs({super.key, required this.items, required this.value, required this.onChanged});
+  final List<(T, String)> items;
+  final T value;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.colorScheme.outlineVariant.withAlpha(110)))),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          for (final (v, label) in items)
+            InkWell(
+              onTap: v == value ? null : () => onChanged(v),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: v == value ? t.colorScheme.onSurface : Colors.transparent, width: 2.5)),
+                ),
+                child: Text(
+                  label,
+                  style: t.textTheme.titleMedium?.copyWith(
+                    fontWeight: v == value ? FontWeight.w700 : FontWeight.w500,
+                    color: v == value ? t.colorScheme.onSurface : t.colorScheme.onSurfaceVariant.withAlpha(170),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 작고 둥근 선택 칩(카테고리·필터)
+class PillChip extends StatelessWidget {
+  const PillChip({super.key, required this.label, required this.selected, required this.onTap, this.icon, this.color});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final IconData? icon;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final c = color ?? t.colorScheme.onSurface;
+    final fg = selected ? (color == null ? t.colorScheme.surface : Colors.white) : t.colorScheme.onSurface;
+    return Material(
+      color: selected ? c : t.colorScheme.surfaceContainerHigh,
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[Icon(icon, size: 16, color: selected ? fg : c), const SizedBox(width: 3)],
+              Text(label, style: t.textTheme.labelLarge?.copyWith(color: fg, fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

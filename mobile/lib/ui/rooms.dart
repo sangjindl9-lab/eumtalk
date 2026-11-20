@@ -200,24 +200,13 @@ class _RoomsTabState extends State<RoomsTab> {
                 onChanged: (_) => setState(() {}),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<String>(
-                  showSelectedIcon: false,
-                  segments: [
-                    ButtonSegment(value: 'region', label: Text(app.me?.regionName.split(' ').last ?? '내 지역')),
-                    const ButtonSegment(value: 'all', label: Text('전체')),
-                    const ButtonSegment(value: 'mine', label: Text('내 방')),
-                  ],
-                  selected: {_view},
-                  onSelectionChanged: (s) {
-                    setState(() => _view = s.first);
-                    _load();
-                  },
-                ),
-              ),
+            UnderlineTabs<String>(
+              items: [('region', app.me?.regionName.split(' ').last ?? '내 지역'), ('all', '전체'), ('mine', '내 방')],
+              value: _view,
+              onChanged: (v) {
+                setState(() => _view = v);
+                _load();
+              },
             ),
             Expanded(child: body),
           ],

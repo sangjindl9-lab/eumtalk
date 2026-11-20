@@ -132,41 +132,31 @@ class _BoardTabState extends State<BoardTab> {
       body: ContentWidth(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<String>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: 'board', label: Text('게시판')),
-                    ButtonSegment(value: 'market', label: Text('장터')),
-                  ],
-                  selected: {_kind},
-                  onSelectionChanged: (s) {
-                    setState(() {
-                      _kind = s.first;
-                      _category = null;
-                      _items = null;
-                    });
-                    _load();
-                  },
-                ),
-              ),
+            UnderlineTabs<String>(
+              items: const [('board', '게시판'), ('market', '장터')],
+              value: _kind,
+              onChanged: (v) {
+                setState(() {
+                  _kind = v;
+                  _category = null;
+                  _items = null;
+                });
+                _load();
+              },
             ),
             SizedBox(
-              height: 44,
+              height: 52,
               child: ListView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
                 children: [
                   for (final e in <MapEntry<String?, String>>[const MapEntry(null, '전체'), ...cats.entries])
                     Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(e.value),
+                      padding: const EdgeInsets.only(right: 6),
+                      child: PillChip(
+                        label: e.value,
                         selected: _category == e.key,
-                        onSelected: (_) {
+                        onTap: () {
                           setState(() => _category = e.key);
                           _load();
                         },

@@ -485,8 +485,10 @@ class _NearbyTabState extends State<NearbyTab> {
               child: Row(
                 children: [
                   for (final g in const ['all', 'female', 'male']) ...[
-                    _GenderChip(
-                      gender: g,
+                    PillChip(
+                      label: g == 'all' ? '전체' : g == 'female' ? '여자' : '남자',
+                      icon: g == 'female' ? Icons.female : g == 'male' ? Icons.male : null,
+                      color: g == 'all' ? null : genderColor(g),
                       selected: _gender == g,
                       onTap: () {
                         if (_gender == g) return;
@@ -633,47 +635,5 @@ class InterestTags extends StatelessWidget {
       child: Text(text, style: t.textTheme.labelMedium?.copyWith(color: highlight ? t.colorScheme.onPrimaryContainer : t.colorScheme.onSurfaceVariant)),
     );
     return Wrap(spacing: 6, runSpacing: 6, children: [for (final i in shown) tag(i, common.contains(i)), if (rest > 0) tag('+$rest', false)]);
-  }
-}
-
-/// 주변 탭 성별 필터 칩(작고 둥근 알약 모양, 선택하면 성별 색으로 채움)
-class _GenderChip extends StatelessWidget {
-  const _GenderChip({required this.gender, required this.selected, required this.onTap});
-  final String gender;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final color = gender == 'all' ? t.colorScheme.primary : genderColor(gender);
-    final label = gender == 'all' ? '전체' : gender == 'female' ? '여자' : '남자';
-    return Material(
-      color: selected ? color : Colors.transparent,
-      shape: StadiumBorder(side: BorderSide(color: selected ? color : t.colorScheme.outlineVariant)),
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (gender != 'all') ...[
-                Icon(gender == 'female' ? Icons.female : Icons.male, size: 16, color: selected ? Colors.white : color),
-                const SizedBox(width: 2),
-              ],
-              Text(
-                label,
-                style: t.textTheme.labelLarge?.copyWith(
-                  color: selected ? Colors.white : t.colorScheme.onSurface,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
