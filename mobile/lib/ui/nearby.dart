@@ -479,41 +479,50 @@ class _NearbyTabState extends State<NearbyTab> {
       body: ContentWidth(
         child: Column(
           children: [
+            // 한 줄 필터: 왼쪽 성별 칩, 오른쪽 정렬 메뉴
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              padding: const EdgeInsets.fromLTRB(16, 0, 8, 6),
               child: Row(
                 children: [
-                  Expanded(
-                    child: SegmentedButton<String>(
-                      showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment(value: 'near', label: Text('가까운 순')),
-                        ButtonSegment(value: 'recent', label: Text('최근 활동 순')),
-                      ],
-                      selected: {_sort},
-                      onSelectionChanged: (s) {
-                        setState(() => _sort = s.first);
+                  for (final g in const ['all', 'female', 'male']) ...[
+                    _GenderChip(
+                      gender: g,
+                      selected: _gender == g,
+                      onTap: () {
+                        if (_gender == g) return;
+                        setState(() => _gender = g);
                         _load();
                       },
                     ),
+                    const SizedBox(width: 6),
+                  ],
+                  const Spacer(),
+                  PopupMenuButton<String>(
+                    initialValue: _sort,
+                    tooltip: '정렬',
+                    onSelected: (v) {
+                      if (v == _sort) return;
+                      setState(() => _sort = v);
+                      _load();
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'near', child: Text('가까운 순')),
+                      PopupMenuItem(value: 'recent', child: Text('최근 활동 순')),
+                    ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.swap_vert, size: 18, color: t.colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 4),
+                          Text(_sort == 'near' ? '가까운 순' : '최근 활동 순', style: t.textTheme.labelLarge?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                          Icon(Icons.arrow_drop_down, color: t.colorScheme.onSurfaceVariant),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: SegmentedButton<String>(
-                showSelectedIcon: false,
-                segments: [
-                  const ButtonSegment(value: 'all', label: Text('전체')),
-                  ButtonSegment(value: 'female', icon: Icon(Icons.female, color: genderColor('female')), label: const Text('여자')),
-                  ButtonSegment(value: 'male', icon: Icon(Icons.male, color: genderColor('male')), label: const Text('남자')),
-                ],
-                selected: {_gender},
-                onSelectionChanged: (s) {
-                  setState(() => _gender = s.first);
-                  _load();
-                },
               ),
             ),
             if (banner != null) Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 10), child: banner),
@@ -624,5 +633,47 @@ class InterestTags extends StatelessWidget {
       child: Text(text, style: t.textTheme.labelMedium?.copyWith(color: highlight ? t.colorScheme.onPrimaryContainer : t.colorScheme.onSurfaceVariant)),
     );
     return Wrap(spacing: 6, runSpacing: 6, children: [for (final i in shown) tag(i, common.contains(i)), if (rest > 0) tag('+$rest', false)]);
+  }
+}
+
+/// 주변 탭 성별 필터 칩(작고 둥근 알약 모양, 선택하면 성별 색으로 채움)
+class _GenderChip extends StatelessWidget {
+  const _GenderChip({required this.gender, required this.selected, required this.onTap});
+  final String gender;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final color = gender == 'all' ? t.colorScheme.primary : genderColor(gender);
+    final label = gender == 'all' ? '전체' : gender == 'female' ? '여자' : '남자';
+    return Material(
+      color: selected ? color : Colors.transparent,
+      shape: StadiumBorder(side: BorderSide(color: selected ? color : t.colorScheme.outlineVariant)),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (gender != 'all') ...[
+                Icon(gender == 'female' ? Icons.female : Icons.male, size: 16, color: selected ? Colors.white : color),
+                const SizedBox(width: 2),
+              ],
+              Text(
+                label,
+                style: t.textTheme.labelLarge?.copyWith(
+                  color: selected ? Colors.white : t.colorScheme.onSurface,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
